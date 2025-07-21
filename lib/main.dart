@@ -1,14 +1,17 @@
 // lib/main.dart
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+// ЭТОТ ИМПОРТ ОБЯЗАТЕЛЕН ДЛЯ РАБОТЫ ДЕЛЕГАТОВ
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart';
-// <<< ИЗМЕНЕНИЕ: Импортируем новый экран блокировки
-import 'presentation/lock_screen/lock_screen.dart';
+import 'presentation/lock_screen/lock_screen.dart'; // Убедитесь, что путь верный
 
-void main() {
-  initializeDateFormatting('ru_RU', null).then((_) {
-    runApp(const MyApp());
-  });
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
+  // Используем await, чтобы гарантировать завершение инициализации перед запуском
+  await initializeDateFormatting('ru_RU', null);
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -17,17 +20,20 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CupertinoApp(
+      // --- ПРАВИЛЬНАЯ КОНФИГУРАЦИЯ ДЛЯ CUPERTINOAPP ---
       localizationsDelegates: [
-        DefaultMaterialLocalizations.delegate,
-        DefaultCupertinoLocalizations.delegate,
-        DefaultWidgetsLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate, // <-- САМЫЙ ВАЖНЫЙ ДЛЯ ДИАЛОГОВ
       ],
-      supportedLocales: [Locale('ru', 'RU')],
+      supportedLocales: [
+        Locale('ru', 'RU'),
+      ],
+      // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
       debugShowCheckedModeBanner: false,
       theme: CupertinoThemeData(
         brightness: Brightness.dark,
       ),
-      // <<< ИЗМЕНЕНИЕ: Стартуем с экрана блокировки
       home: LockScreen(),
     );
   }

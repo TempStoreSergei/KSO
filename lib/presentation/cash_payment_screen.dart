@@ -23,7 +23,6 @@ class _CashPaymentScreenState extends State<CashPaymentScreen> {
     'Стирка': 200.0,
   };
 
-  // --- СОСТОЯНИЕ ЭКРАНА ---
   double _totalAmount = 0;
   final List<int> _enteredBills = [5000, 1000, 200, 50, 50];
 
@@ -31,11 +30,11 @@ class _CashPaymentScreenState extends State<CashPaymentScreen> {
   final Map<int, Color> _banknoteColors = {
     5000: Colors.red.shade400,
     2000: Colors.blue.shade600,
-    1000: Colors.cyan.shade400,
+    1000: Colors.teal.shade400,
     500: Colors.purple.shade400,
     200: Colors.green.shade600,
-    100: Colors.orange.shade400,
-    50: Colors.lightBlue.shade300,
+    100: Colors.brown.shade400,
+    50: Colors.blue.shade300,
   };
 
   @override
@@ -147,12 +146,20 @@ class _CashPaymentScreenState extends State<CashPaymentScreen> {
               Expanded(
                 child: _enteredBills.isEmpty
                     ? Center(child: Text("Ожидание купюр...", style: TextStyle(color: Colors.white54, fontSize: scaleText(context, 14))))
-                    : ListView.builder(
-                  padding: EdgeInsets.zero,
-                  itemCount: _enteredBills.length,
-                  itemBuilder: (context, index) {
-                    return _buildEnteredBillListItem(_enteredBills[index]);
-                  },
+                    : ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: _enteredBills.length,
+                    itemBuilder: (context, index) {
+                      return _buildEnteredBillListItem(_enteredBills[index]);
+                    },
+                    separatorBuilder: (context, index) => Divider(
+                      color: Colors.white.withOpacity(0.15),
+                      height: 1,
+                      thickness: 1,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -209,41 +216,49 @@ class _CashPaymentScreenState extends State<CashPaymentScreen> {
     );
   }
 
-  // Новый виджет для элемента списка внесенных купюр
   Widget _buildEnteredBillListItem(int bill) {
-    final color = _banknoteColors[bill] ?? Colors.grey;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
+    return GlassmorphicContainer(
+      borderRadius: 0,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color,
-              boxShadow: [BoxShadow(color: color.withOpacity(0.7), blurRadius: 6, spreadRadius: 1)],
-            ),
-            child: const Center(
-              child: Icon(CupertinoIcons.checkmark_alt, color: Colors.white, size: 20),
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: Colors.white,
+            child: Icon(
+              CupertinoIcons.money_rubl_circle_fill,
+              color: Colors.black.withOpacity(0.7),
+              size: 30,
             ),
           ),
           const SizedBox(width: 16),
-          Text(
-            "Принята купюра $bill руб.",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              shadows: [const Shadow(color: Colors.black38, blurRadius: 2)],
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "$bill рублей",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: scaleText(context, 20),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                "Купюра принята",
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: scaleText(context, 14),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // Новый виджет для отображения стилизованной банкноты
   Widget _buildBanknoteDisplay(int value, Color color) {
     return GlassmorphicContainer(
       borderRadius: 8,
