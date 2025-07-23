@@ -1,9 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:motel/models/booking_data.dart';
 import 'package:motel/presentation/dashboard_screen/booking_dashboard_screen.dart';
 import 'package:motel/presentation/helpers/adaptive_text.dart';
 import 'package:motel/presentation/helpers/glassmorphic_container.dart';
+import 'package:motel/presentation/helpers/app_background.dart';
 import 'package:provider/provider.dart';
 import 'guest_info/keyboard_notifier.dart';
 import 'guest_info/custom_keyboard.dart';
@@ -134,76 +136,76 @@ class _GuestInfoViewState extends State<_GuestInfoView> {
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(image: AssetImage('assets/images/hostel_social_area.jpg'), fit: BoxFit.cover),
-        ),
+      body: AppBackground(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1020),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    backButton,
-                    const Spacer(),
-                    Text('Данные гостя', style: TextStyle(color: Colors.white, fontSize: scaleText(context, 40), fontWeight: FontWeight.bold, shadows: const [Shadow(blurRadius: 10)])),
-                    const Spacer(),
-                    Opacity(opacity: 0, child: backButton),
-                  ],
-                ),
-                const SizedBox(height: 30),
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
                     children: [
-                      Expanded(
-                        flex: 2,
-                        child: Column(
-                          children: [
-                            FocusableTextField(
-                              controller: _firstNameController,
-                              placeholder: 'Имя *',
-                              controllerIndex: 0,
-                              focusNode: _firstNameFocusNode,
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: FocusableTextField(
-                                    controller: _lastNameController,
-                                    placeholder: 'Фамилия *',
-                                    controllerIndex: 1,
-                                    focusNode: _lastNameFocusNode,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: FocusableTextField(
-                                    controller: _patronymicController,
-                                    placeholder: 'Отчество',
-                                    controllerIndex: 2,
-                                    focusNode: _patronymicFocusNode,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 1,
-                        child: nextButton,
-                      ),
+                      backButton,
+                      const Spacer(),
+                      Text('Данные гостя', style: TextStyle(color: Colors.white, fontSize: scaleText(context, 40), fontWeight: FontWeight.bold, shadows: const [Shadow(blurRadius: 10)])),
+                      const Spacer(),
+                      Opacity(opacity: 0, child: backButton),
                     ],
                   ),
-                ),
-                const SizedBox(height: 40),
-                CustomKeyboard(onKeyPressed: keyboardNotifier.onKeyPressed),
-              ],
+                  const SizedBox(height: 30),
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            children: [
+                              FocusableTextField(
+                                controller: _firstNameController,
+                                placeholder: 'Имя *',
+                                controllerIndex: 0,
+                                focusNode: _firstNameFocusNode,
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: FocusableTextField(
+                                      controller: _lastNameController,
+                                      placeholder: 'Фамилия *',
+                                      controllerIndex: 1,
+                                      focusNode: _lastNameFocusNode,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: FocusableTextField(
+                                      controller: _patronymicController,
+                                      placeholder: 'Отчество',
+                                      controllerIndex: 2,
+                                      focusNode: _patronymicFocusNode,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 1,
+                          child: nextButton,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  CustomKeyboard(onKeyPressed: keyboardNotifier.onKeyPressed),
+                ],
+              ),
             ),
           ),
         ),

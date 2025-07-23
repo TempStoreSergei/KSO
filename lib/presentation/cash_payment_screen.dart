@@ -4,6 +4,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:motel/models/booking_data.dart';
 import 'package:motel/presentation/helpers/adaptive_text.dart';
 import 'package:motel/presentation/helpers/glassmorphic_container.dart';
+import 'package:motel/presentation/helpers/app_background.dart';
 
 class CashPaymentScreen extends StatefulWidget {
   final BookingData bookingData;
@@ -63,10 +64,7 @@ class _CashPaymentScreenState extends State<CashPaymentScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(image: AssetImage('assets/images/hostel_cozy_room.jpg'), fit: BoxFit.cover),
-        ),
+      body: AppBackground(
         child: SafeArea(
           child: Center(
             child: FittedBox(

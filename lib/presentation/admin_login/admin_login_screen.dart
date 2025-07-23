@@ -1,5 +1,3 @@
-// lib/presentation/admin_login/admin_login_screen.dart
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:motel/data/repositories/admin_auth_repository_impl.dart';
@@ -10,6 +8,7 @@ import 'package:motel/presentation/guest_info/focusable_textfield.dart';
 import 'package:motel/presentation/guest_info/keyboard_notifier.dart';
 import 'package:motel/presentation/helpers/adaptive_text.dart';
 import 'package:motel/presentation/helpers/glassmorphic_container.dart';
+import 'package:motel/presentation/helpers/app_background.dart';
 import 'package:provider/provider.dart';
 
 class AdminLoginScreen extends StatelessWidget {
@@ -31,7 +30,6 @@ class _AdminLoginView extends StatefulWidget {
 }
 
 class __AdminLoginViewState extends State<_AdminLoginView> {
-  // Убираем _loginController, оставляем только пароль
   final _passwordController = TextEditingController();
   final _passwordFocusNode = FocusNode();
 
@@ -44,7 +42,6 @@ class __AdminLoginViewState extends State<_AdminLoginView> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final keyboardNotifier = Provider.of<KeyboardNotifier>(context, listen: false);
-      // Регистрируем только поле пароля
       keyboardNotifier.registerFields(
         controllers: [_passwordController],
         focusNodes: [_passwordFocusNode],
@@ -132,10 +129,7 @@ class __AdminLoginViewState extends State<_AdminLoginView> {
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(image: AssetImage('assets/images/hostel_social_area.jpg'), fit: BoxFit.cover),
-        ),
+      body: AppBackground(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1020),
@@ -161,7 +155,7 @@ class __AdminLoginViewState extends State<_AdminLoginView> {
                         child: FocusableTextField(
                           controller: _passwordController,
                           placeholder: 'Пароль администратора',
-                          controllerIndex: 0, // Индекс теперь 0
+                          controllerIndex: 0,
                           focusNode: _passwordFocusNode,
                         ),
                       ),

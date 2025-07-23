@@ -1,11 +1,10 @@
 import 'package:flutter/cupertino.dart';
-// Импортируем экран настройки заставки
 import 'package:motel/presentation/screensaver_settings/screensaver_settings_screen.dart';
-// Импортируем экран смены пароля
 import 'package:motel/presentation/settings/change_password_screen.dart';
+import 'package:motel/presentation/settings/desktop_background_settings_screen.dart';
+import 'package:motel/presentation/settings/services_settings_screen.dart';
 
-// Это временный класс-заглушка для экранов, которые еще не созданы.
-// Он позволяет навигации работать без ошибок.
+// Временный класс-заглушка для экранов, которые еще не созданы.
 class DummyEditScreen extends StatelessWidget {
   final String title;
   const DummyEditScreen({super.key, required this.title});
@@ -104,9 +103,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   header: const Text('ОБОРУДОВАНИЕ'),
                   children: [
                     _buildNavigationTile(
-                      label: 'Фон',
+                      label: 'Рабочий стол',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const DesktopBackgroundSettingsScreen())),
+                      icon: CupertinoIcons.desktopcomputer,
+                      iconColor: CupertinoColors.activeGreen,
+                    ),
+                    _buildNavigationTile(
+                      label: 'Заставка', // Переименовано для ясности
                       onTap: () {
-                        // Переход на экран настройки заставки (фона)
                         Navigator.of(context).push(
                           CupertinoPageRoute(builder: (context) => const ScreensaverSettingsScreen()),
                         );
@@ -116,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     _buildNavigationTile(
                       label: 'Услуги',
-                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const DummyEditScreen(title: 'Услуги'))),
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ServicesSettingsScreen())),
                       icon: CupertinoIcons.list_bullet,
                       iconColor: CupertinoColors.systemBlue,
                     ),
@@ -150,7 +154,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildNavigationTile(
                       label: 'Сменить пароль',
                       onTap: () {
-                        // Переход на экран смены пароля
                         Navigator.of(context).push(
                           CupertinoPageRoute(builder: (_) => const ChangePasswordScreen()),
                         );
@@ -171,8 +174,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildNavigationTile(
                       label: 'Telegram',
                       onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const DummyEditScreen(title: 'Telegram'))),
-                      icon: CupertinoIcons.paperplane_fill, // Иконка для Telegram
-                      iconColor: const Color(0xFF2AABEE), // Цвет иконки Telegram
+                      icon: CupertinoIcons.paperplane_fill,
+                      iconColor: const Color(0xFF2AABEE),
                     ),
                   ],
                 ),
