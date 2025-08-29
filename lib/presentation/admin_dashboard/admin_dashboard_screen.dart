@@ -3,6 +3,11 @@ import 'package:motel/presentation/screensaver_settings/screensaver_settings_scr
 import 'package:motel/presentation/settings/change_password_screen.dart';
 import 'package:motel/presentation/settings/desktop_background_settings_screen.dart';
 import 'package:motel/presentation/settings/services_settings_screen.dart';
+import 'package:motel/presentation/settings/shift_settings_screen.dart';
+import 'package:motel/presentation/settings/bill_acceptor_settings_screen.dart';
+import 'package:motel/presentation/settings/bill_dispenser_settings_screen.dart';
+import 'package:motel/presentation/settings/bill_acceptor_test_screen.dart';
+import 'package:motel/presentation/settings/bill_dispenser_test_screen.dart';
 
 // Временный класс-заглушка для экранов, которые еще не созданы.
 class DummyEditScreen extends StatelessWidget {
@@ -109,7 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       iconColor: CupertinoColors.activeGreen,
                     ),
                     _buildNavigationTile(
-                      label: 'Заставка', // Переименовано для ясности
+                      label: 'Заставка',
                       onTap: () {
                         Navigator.of(context).push(
                           CupertinoPageRoute(builder: (context) => const ScreensaverSettingsScreen()),
@@ -137,8 +142,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       iconColor: CupertinoColors.systemOrange,
                     ),
                     _buildNavigationTile(
+                      label: 'Диспенсер купюр',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const BillDispenserSettingsScreen())),
+                      icon: CupertinoIcons.arrow_up_circle,
+                      iconColor: CupertinoColors.systemTeal,
+                    ),
+                    _buildNavigationTile(
                       label: 'Купюроприемник',
-                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const DummyEditScreen(title: 'Купюроприемник'))),
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const BillAcceptorSettingsScreen())),
                       icon: CupertinoIcons.money_dollar_circle,
                       iconColor: CupertinoColors.systemPurple,
                     ),
@@ -146,7 +157,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
 
-              // БЛОК 2: БЕЗОПАСНОСТЬ
+              // БЛОК 2: СМЕНЫ
+              SliverToBoxAdapter(
+                child: CupertinoListSection.insetGrouped(
+                  header: const Text('СМЕНЫ'),
+                  children: [
+                    _buildNavigationTile(
+                      label: 'Управление сменами',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ShiftSettingsScreen())),
+                      icon: CupertinoIcons.clock_fill,
+                      iconColor: CupertinoColors.systemIndigo,
+                    ),
+                  ],
+                ),
+              ),
+
+              // БЛОК 3: ТЕСТИРОВАНИЕ
+              SliverToBoxAdapter(
+                child: CupertinoListSection.insetGrouped(
+                  header: const Text('ТЕСТИРОВАНИЕ'),
+                  footer: const Text('Проведите тестирование оборудования для проверки работоспособности.'),
+                  children: [
+                    _buildNavigationTile(
+                      label: 'Тест купюроприемника',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const BillAcceptorTestScreen())),
+                      icon: CupertinoIcons.lab_flask,
+                      iconColor: CupertinoColors.systemPink,
+                    ),
+                    _buildNavigationTile(
+                      label: 'Тест диспенсера купюр',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const BillDispenserTestScreen())),
+                      icon: CupertinoIcons.arrow_up_circle,
+                      iconColor: CupertinoColors.systemOrange,
+                    ),
+                  ],
+                ),
+              ),
+
+              // БЛОК 4: БЕЗОПАСНОСТЬ
               SliverToBoxAdapter(
                 child: CupertinoListSection.insetGrouped(
                   header: const Text('БЕЗОПАСНОСТЬ'),
@@ -165,7 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
 
-              // БЛОК 3: УВЕДОМЛЕНИЯ
+              // БЛОК 5: УВЕДОМЛЕНИЯ
               SliverToBoxAdapter(
                 child: CupertinoListSection.insetGrouped(
                   header: const Text('УВЕДОМЛЕНИЯ'),
@@ -181,7 +229,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
 
-              // БЛОК 4: ПРИЛОЖЕНИЕ
+              // БЛОК 6: ПРИЛОЖЕНИЕ
               SliverToBoxAdapter(
                 child: CupertinoListSection.insetGrouped(
                   header: const Text('ПРИЛОЖЕНИЕ'),
@@ -212,7 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
 
-              // БЛОК 5: ВЫХОД ИЗ АККАУНТА
+              // БЛОК 7: ВЫХОД ИЗ АККАУНТА
               SliverToBoxAdapter(
                 child: CupertinoListSection.insetGrouped(
                   children: [
