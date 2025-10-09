@@ -34,6 +34,14 @@ class KeyboardNotifier extends ChangeNotifier {
     }
   }
 
+  // НОВЫЙ МЕТОД: устанавливает активное поле БЕЗ requestFocus (для синхронизации с UI)
+  void setActiveField(int index) {
+    if (index >= 0 && index < _controllers.length) {
+      _activeIndex = index;
+      notifyListeners();
+    }
+  }
+
   void onKeyPressed(String key) {
     if (activeController == null) return;
 
@@ -88,12 +96,18 @@ class KeyboardNotifier extends ChangeNotifier {
 
   void _insertText(String text) {
     final controller = activeController!;
-    final oldText = controller.text;
     final selection = controller.selection;
-    final newText = oldText.replaceRange(selection.start, selection.end, text);
-    controller.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(offset: selection.start + text.length),
+
+    // Используем встроенный механизм
+    final newText = controller.text.replaceRange(
+        selection.start,
+        selection.end,
+        text
+    );
+
+    controller.text = newText;
+    controller.selection = TextSelection.collapsed(
+        offset: selection.start + text.length
     );
   }
 }

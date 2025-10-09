@@ -1,4 +1,3 @@
-// lib/presentation/settings/bill_dispenser_settings_screen.dart
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 
@@ -21,12 +20,11 @@ class BillDispenserStatus {
   });
 
   factory BillDispenserStatus.fromJson(Map<String, dynamic> json) {
-    final billDispenserData = json['billDispenserData'] ?? {};
     return BillDispenserStatus(
-      upperBoxValue: billDispenserData['upperBoxValue'] ?? 0,
-      lowerBoxValue: billDispenserData['lowerBoxValue'] ?? 0,
-      upperBoxCount: billDispenserData['upperBoxCount'] ?? 0,
-      lowerBoxCount: billDispenserData['lowerBoxCount'] ?? 0,
+      upperBoxValue: json['upperBoxValue'] ?? 0,
+      lowerBoxValue: json['lowerBoxValue'] ?? 0,
+      upperBoxCount: json['upperBoxCount'] ?? 0,
+      lowerBoxCount: json['lowerBoxCount'] ?? 0,
     );
   }
 }
@@ -38,13 +36,13 @@ class BillDispenserUseCases {
   BillDispenserUseCases(this._apiClient);
 
   Future<BillDispenserStatus> getStatus() async {
-    final response = await _apiClient.get('/settings/get_bill_dispenser_status');
+    final response = await _apiClient.get('/cash_system/bill_dispenser/status');
     return BillDispenserStatus.fromJson(response);
   }
 
   Future<void> setCount(int upperCount, int lowerCount) async {
     await _apiClient.post(
-      '/settings/set_bill_dispenser_count',
+      '/cash_system/bill_dispenser/add_bill_count',
       body: {
         'upperCount': upperCount,
         'lowerCount': lowerCount,
@@ -53,15 +51,27 @@ class BillDispenserUseCases {
   }
 
   Future<void> resetCount() async {
-    await _apiClient.get('/settings/reset_bill_dispenser_count');
+    await _apiClient.get('/cash_system/bill_dispenser/reset_bill_count');
   }
 
   Future<void> setLevels(int upperLvl, int lowerLvl) async {
     await _apiClient.post(
-      '/settings/set_bill_dispenser_lvl',
+      '/cash_system/bill_dispenser/set_nominal',
       body: {
-        'upperLvl': upperLvl,
-        'lowerLvl': lowerLvl,
+        'upperLvl': upperLvl * 100,
+        'lowerLvl': lowerLvl * 100,
+      },
+    );
+  }
+
+  Future<void> testDispenser() async {
+    await _apiClient.post(
+      '/cash_system/bill_dispenser/test_bill_dispenser',
+      body: {
+        'upperLvl': true,
+        'upperLvlAmount': 1,
+        'lowerLvl': true,
+        'lowerLvlAmount': 1,
       },
     );
   }
@@ -89,9 +99,17 @@ class _BillDispenserSettingsView extends StatefulWidget {
   State<_BillDispenserSettingsView> createState() => _BillDispenserSettingsViewState();
 }
 
+enum TestStatus {
+  inactive,
+  upperBox,
+  lowerBox,
+  complete,
+}
+
 class _BillDispenserSettingsViewState extends State<_BillDispenserSettingsView> {
   BillDispenserStatus? _status;
   bool _isLoading = false;
+  TestStatus _testStatus = TestStatus.inactive;
 
   // Временные значения для настройки
   int _newUpperBoxCount = 0;
@@ -110,13 +128,13 @@ class _BillDispenserSettingsViewState extends State<_BillDispenserSettingsView> 
     try {
       final useCases = Provider.of<BillDispenserUseCases>(context, listen: false);
       final status = await useCases.getStatus();
-
+      print('Decoded message: $status');
       setState(() {
         _status = status;
         _newUpperBoxCount = status.upperBoxCount;
         _newLowerBoxCount = status.lowerBoxCount;
-        _newUpperBoxValue = status.upperBoxValue;
-        _newLowerBoxValue = status.lowerBoxValue;
+        _newUpperBoxValue = status.upperBoxValue ~/ 100;
+        _newLowerBoxValue = status.lowerBoxValue ~/ 100;
       });
     } catch (e) {
       _showErrorDialog('Ошибка загрузки данных: ${e.toString()}');
@@ -151,12 +169,45 @@ class _BillDispenserSettingsViewState extends State<_BillDispenserSettingsView> 
     }
   }
 
+  Future<void> _testDispenser() async {
+    // Проверяем наличие купюр
+    if ((_status?.upperBoxCount ?? 0) < 1 || (_status?.lowerBoxCount ?? 0) < 1) {
+      _showErrorDialog('Недостаточно купюр в диспенсере для теста.\nТребуется минимум 1 купюра в каждом боксе.');
+      return;
+    }
+
+    // Анимация смены статусов
+    setState(() => _testStatus = TestStatus.upperBox);
+    await Future.delayed(const Duration(seconds: 20));
+
+    if (!mounted) return;
+    setState(() => _testStatus = TestStatus.lowerBox);
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+    setState(() => _testStatus = TestStatus.complete);
+    await Future.delayed(const Duration(seconds: 2));
+
+    try {
+      final useCases = Provider.of<BillDispenserUseCases>(context, listen: false);
+      await useCases.testDispenser();
+      _showSuccessDialog('Тест выдачи завершен.\nВыдано: 1 купюра из верхнего бокса и 1 из нижнего.');
+      await _loadData();
+    } catch (e) {
+      _showErrorDialog('Ошибка запуска теста: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() => _testStatus = TestStatus.inactive);
+      }
+    }
+  }
+
   Future<void> _resetCount() async {
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Сброс счетчика'),
-        content: const Text('Вы уверены, что хотите сбросить счетчик купюр в диспенсере?'),
+        title: const Text('Инкассация'),
+        content: const Text('Вы уверены, что хотите выполнить инкассацию и сбросить счетчик купюр в диспенсере?'),
         actions: [
           CupertinoDialogAction(
             child: const Text('Отмена'),
@@ -171,7 +222,7 @@ class _BillDispenserSettingsViewState extends State<_BillDispenserSettingsView> 
                 final useCases = Provider.of<BillDispenserUseCases>(context, listen: false);
                 await useCases.resetCount();
                 await _loadData();
-                _showSuccessDialog('Счетчик сброшен');
+                _showSuccessDialog('Инкассация выполнена');
               } catch (e) {
                 _showErrorDialog('Ошибка сброса: ${e.toString()}');
               }
@@ -307,6 +358,53 @@ class _BillDispenserSettingsViewState extends State<_BillDispenserSettingsView> 
     }
   }
 
+  String _getTestStatusText() {
+    switch (_testStatus) {
+      case TestStatus.inactive:
+        final canTest = (_status?.upperBoxCount ?? 0) >= 1 && (_status?.lowerBoxCount ?? 0) >= 1;
+        return canTest ? '' : 'Недостаточно купюр';
+      case TestStatus.upperBox:
+        return 'Верхний бокс';
+      case TestStatus.lowerBox:
+        return 'Нижний бокс';
+      case TestStatus.complete:
+        return 'Готово';
+    }
+  }
+
+  Widget? _getTestStatusWidget() {
+    if (_testStatus != TestStatus.inactive) {
+      return _buildStatusTag(
+        _getTestStatusText(),
+        _getTestStatusColor().withOpacity(0.15),
+        _getTestStatusColor(),
+      );
+    }
+
+    final canTest = (_status?.upperBoxCount ?? 0) >= 1 && (_status?.lowerBoxCount ?? 0) >= 1;
+    if (!canTest) {
+      return _buildStatusTag(
+        'Недостаточно купюр',
+        CupertinoColors.systemGrey5,
+        CupertinoColors.systemGrey,
+      );
+    }
+
+    return const CupertinoListTileChevron();
+  }
+
+  Color _getTestStatusColor() {
+    switch (_testStatus) {
+      case TestStatus.inactive:
+        return CupertinoColors.systemGrey;
+      case TestStatus.upperBox:
+      case TestStatus.lowerBox:
+        return CupertinoColors.systemOrange;
+      case TestStatus.complete:
+        return CupertinoColors.systemGreen;
+    }
+  }
+
   Widget _buildStatusSection() {
     if (_status == null) return Container();
 
@@ -315,7 +413,7 @@ class _BillDispenserSettingsViewState extends State<_BillDispenserSettingsView> 
       children: [
         CupertinoListTile(
           title: const Text('Верхний бокс'),
-          subtitle: Text('Номинал: ${_status!.upperBoxValue} руб.'),
+          subtitle: Text('Номинал: ${_status!.upperBoxValue ~/ 100} руб.'),
           trailing: Text(
             '${_status!.upperBoxCount} купюр',
             style: const TextStyle(
@@ -326,7 +424,7 @@ class _BillDispenserSettingsViewState extends State<_BillDispenserSettingsView> 
         ),
         CupertinoListTile(
           title: const Text('Нижний бокс'),
-          subtitle: Text('Номинал: ${_status!.lowerBoxValue} руб.'),
+          subtitle: Text('Номинал: ${_status!.lowerBoxValue ~/ 100} руб.'),
           trailing: Text(
             '${_status!.lowerBoxCount} купюр',
             style: const TextStyle(
@@ -339,151 +437,281 @@ class _BillDispenserSettingsViewState extends State<_BillDispenserSettingsView> 
     );
   }
 
-  Widget _buildCountSettingsSection() {
-    return CupertinoListSection.insetGrouped(
-      header: const Text('ДОБАВЛЕНИЕ КУПЮР'),
-      footer: const Text('Добавьте купюры в каждый бокс диспенсера. Максимальная вместимость: 1000 купюр.'),
-      children: [
-        CupertinoListTile(
-          title: const Text('Верхний бокс'),
-          subtitle: Text('Текущее: ${_status?.upperBoxCount ?? 0} / 1000'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '+${_newUpperBoxCount - (_status?.upperBoxCount ?? 0)}',
-                style: const TextStyle(
-                  color: CupertinoColors.systemGrey,
-                  fontSize: 17,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const CupertinoListTileChevron(),
-            ],
+  Widget _buildInfoFooter(String text, Color barColor) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 4,
+            height: null,
+            constraints: const BoxConstraints(minHeight: 28),
+            decoration: BoxDecoration(
+              color: barColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-          onTap: () => _showCountPicker(
-            title: 'Верхний бокс',
-            currentValue: _newUpperBoxCount,
-            onValueChanged: (value) => setState(() => _newUpperBoxCount = value),
-          ),
-        ),
-        CupertinoListTile(
-          title: const Text('Нижний бокс'),
-          subtitle: Text('Текущее: ${_status?.lowerBoxCount ?? 0} / 1000'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '+${_newLowerBoxCount - (_status?.lowerBoxCount ?? 0)}',
-                style: const TextStyle(
-                  color: CupertinoColors.systemGrey,
-                  fontSize: 17,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const CupertinoListTileChevron(),
-            ],
-          ),
-          onTap: () => _showCountPicker(
-            title: 'Нижний бокс',
-            currentValue: _newLowerBoxCount,
-            onValueChanged: (value) => setState(() => _newLowerBoxCount = value),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            width: double.infinity,
-            child: CupertinoButton(
-              color: (_newUpperBoxCount > (_status?.upperBoxCount ?? 0) || _newLowerBoxCount > (_status?.lowerBoxCount ?? 0))
-                  ? CupertinoColors.activeBlue
-                  : CupertinoColors.systemGrey4,
-              borderRadius: BorderRadius.circular(12),
-              onPressed: (_newUpperBoxCount > (_status?.upperBoxCount ?? 0) || _newLowerBoxCount > (_status?.lowerBoxCount ?? 0))
-                  ? _updateCount
-                  : null,
-              child: const Text(
-                'Добавить купюры',
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                text,
                 style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: CupertinoColors.white,
+                  fontSize: 14,
+                  height: 1.4,
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
                 ),
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusTag(String text, Color backgroundColor, Color textColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCountSettingsSection() {
+    final hasChanges = _newUpperBoxCount > (_status?.upperBoxCount ?? 0) ||
+        _newLowerBoxCount > (_status?.lowerBoxCount ?? 0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CupertinoListSection.insetGrouped(
+          header: const Text('ДОБАВЛЕНИЕ КУПЮР'),
+          children: [
+            CupertinoListTile(
+              title: const Text('Верхний бокс'),
+              subtitle: Text('Текущее: ${_status?.upperBoxCount ?? 0} / 1000'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '+${_newUpperBoxCount - (_status?.upperBoxCount ?? 0)}',
+                    style: const TextStyle(
+                      color: CupertinoColors.systemGrey,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const CupertinoListTileChevron(),
+                ],
+              ),
+              onTap: () => _showCountPicker(
+                title: 'Верхний бокс',
+                currentValue: _newUpperBoxCount,
+                onValueChanged: (value) => setState(() => _newUpperBoxCount = value),
+              ),
+            ),
+            CupertinoListTile(
+              title: const Text('Нижний бокс'),
+              subtitle: Text('Текущее: ${_status?.lowerBoxCount ?? 0} / 1000'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '+${_newLowerBoxCount - (_status?.lowerBoxCount ?? 0)}',
+                    style: const TextStyle(
+                      color: CupertinoColors.systemGrey,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const CupertinoListTileChevron(),
+                ],
+              ),
+              onTap: () => _showCountPicker(
+                title: 'Нижний бокс',
+                currentValue: _newLowerBoxCount,
+                onValueChanged: (value) => setState(() => _newLowerBoxCount = value),
+              ),
+            ),
+            CupertinoListTile(
+              leading: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: hasChanges ? CupertinoColors.activeBlue : CupertinoColors.systemGrey4,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  CupertinoIcons.add,
+                  color: CupertinoColors.white,
+                  size: 20,
+                ),
+              ),
+              title: Text(
+                'Добавить купюры',
+                style: TextStyle(
+                  color: hasChanges ? CupertinoColors.activeBlue : CupertinoColors.systemGrey,
+                  fontSize: 17,
+                ),
+              ),
+              trailing: hasChanges
+                  ? const CupertinoListTileChevron()
+                  : _buildStatusTag(
+                'Нет изменений',
+                CupertinoColors.systemGrey5,
+                CupertinoColors.systemGrey,
+              ),
+              onTap: hasChanges ? _updateCount : null,
+            ),
+          ],
+        ),
+        _buildInfoFooter(
+          'Добавьте купюры в каждый бокс диспенсера. Максимальная вместимость: 1000 купюр.',
+          CupertinoColors.activeBlue,
         ),
       ],
     );
   }
 
   Widget _buildLevelSettingsSection() {
-    return CupertinoListSection.insetGrouped(
-      header: const Text('НАСТРОЙКА НОМИНАЛОВ'),
-      footer: const Text('Установите номиналы купюр для каждого бокса диспенсера.'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CupertinoListTile(
-          title: const Text('Верхний бокс'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$_newUpperBoxValue',
-                style: const TextStyle(
-                  color: CupertinoColors.systemGrey,
-                  fontSize: 17,
-                ),
+        CupertinoListSection.insetGrouped(
+          header: const Text('НАСТРОЙКА НОМИНАЛОВ'),
+          children: [
+            CupertinoListTile(
+              title: const Text('Верхний бокс'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$_newUpperBoxValue',
+                    style: const TextStyle(
+                      color: CupertinoColors.systemGrey,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const CupertinoListTileChevron(),
+                ],
               ),
-              const SizedBox(width: 8),
-              const CupertinoListTileChevron(),
-            ],
-          ),
-          onTap: () => _showCountPicker(
-            title: 'Номинал верхнего бокса',
-            currentValue: _newUpperBoxValue,
-            onValueChanged: (value) => setState(() => _newUpperBoxValue = value),
-          ),
-        ),
-        CupertinoListTile(
-          title: const Text('Нижний бокс'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$_newLowerBoxValue',
-                style: const TextStyle(
-                  color: CupertinoColors.systemGrey,
-                  fontSize: 17,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const CupertinoListTileChevron(),
-            ],
-          ),
-          onTap: () => _showCountPicker(
-            title: 'Номинал нижнего бокса',
-            currentValue: _newLowerBoxValue,
-            onValueChanged: (value) => setState(() => _newLowerBoxValue = value),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            width: double.infinity,
-            child: CupertinoButton(
-              color: CupertinoColors.activeBlue,
-              borderRadius: BorderRadius.circular(12),
-              onPressed: _updateLevels,
-              child: const Text(
-                'Обновить номиналы',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: CupertinoColors.white,
-                ),
+              onTap: () => _showCountPicker(
+                title: 'Номинал верхнего бокса',
+                currentValue: _newUpperBoxValue,
+                onValueChanged: (value) => setState(() => _newUpperBoxValue = value),
               ),
             ),
-          ),
+            CupertinoListTile(
+              title: const Text('Нижний бокс'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$_newLowerBoxValue',
+                    style: const TextStyle(
+                      color: CupertinoColors.systemGrey,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const CupertinoListTileChevron(),
+                ],
+              ),
+              onTap: () => _showCountPicker(
+                title: 'Номинал нижнего бокса',
+                currentValue: _newLowerBoxValue,
+                onValueChanged: (value) => setState(() => _newLowerBoxValue = value),
+              ),
+            ),
+            CupertinoListTile(
+              leading: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.activeBlue,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  CupertinoIcons.pencil,
+                  color: CupertinoColors.white,
+                  size: 20,
+                ),
+              ),
+              title: const Text(
+                'Обновить номиналы',
+                style: TextStyle(
+                  color: CupertinoColors.activeBlue,
+                  fontSize: 17,
+                ),
+              ),
+              trailing: const CupertinoListTileChevron(),
+              onTap: _updateLevels,
+            ),
+          ],
+        ),
+        _buildInfoFooter(
+          'Установите номиналы купюр для каждого бокса диспенсера.',
+          CupertinoColors.activeBlue,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTestSection() {
+    final canTest = (_status?.upperBoxCount ?? 0) >= 1 &&
+        (_status?.lowerBoxCount ?? 0) >= 1 &&
+        _testStatus == TestStatus.inactive;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CupertinoListSection.insetGrouped(
+          header: const Text('ТЕСТИРОВАНИЕ'),
+          children: [
+            CupertinoListTile(
+              leading: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: canTest ? CupertinoColors.activeGreen : CupertinoColors.systemGrey4,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: _testStatus != TestStatus.inactive
+                    ? const CupertinoActivityIndicator(color: CupertinoColors.white, radius: 10)
+                    : const Icon(
+                  CupertinoIcons.play_fill,
+                  color: CupertinoColors.white,
+                  size: 18,
+                ),
+              ),
+              title: Text(
+                'Тест выдачи',
+                style: TextStyle(
+                  color: canTest ? CupertinoColors.activeGreen : CupertinoColors.systemGrey,
+                  fontSize: 17,
+                ),
+              ),
+              trailing: _getTestStatusWidget(),
+              onTap: canTest ? _testDispenser : null,
+            ),
+          ],
+        ),
+        _buildInfoFooter(
+          'Запустите тест выдачи: будет выдана 1 купюра из верхнего бокса и 1 из нижнего.',
+          CupertinoColors.activeGreen,
         ),
       ],
     );
@@ -526,31 +754,48 @@ class _BillDispenserSettingsViewState extends State<_BillDispenserSettingsView> 
                   child: _buildLevelSettingsSection(),
                 ),
 
+                // Тестирование
+                SliverToBoxAdapter(
+                  child: _buildTestSection(),
+                ),
+
                 // Действия
                 SliverToBoxAdapter(
-                  child: CupertinoListSection.insetGrouped(
-                    header: const Text('ДЕЙСТВИЯ'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CupertinoListTile(
-                        title: const Text(
-                          'Сбросить счетчик',
-                          style: TextStyle(color: CupertinoColors.systemRed),
-                        ),
-                        leading: Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: CupertinoColors.systemRed,
-                            borderRadius: BorderRadius.circular(8),
+                      CupertinoListSection.insetGrouped(
+                        header: const Text('ДЕЙСТВИЯ'),
+                        children: [
+                          CupertinoListTile(
+                            leading: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: CupertinoColors.systemRed,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                CupertinoIcons.money_dollar_circle,
+                                color: CupertinoColors.white,
+                                size: 20,
+                              ),
+                            ),
+                            title: const Text(
+                              'Инкассация',
+                              style: TextStyle(
+                                color: CupertinoColors.systemRed,
+                                fontSize: 17,
+                              ),
+                            ),
+                            trailing: const CupertinoListTileChevron(),
+                            onTap: _resetCount,
                           ),
-                          child: const Icon(
-                            CupertinoIcons.restart,
-                            color: CupertinoColors.white,
-                            size: 20,
-                          ),
-                        ),
-                        trailing: const CupertinoListTileChevron(),
-                        onTap: _resetCount,
+                        ],
+                      ),
+                      _buildInfoFooter(
+                        'Выполните инкассацию и сбросьте счетчик купюр после изъятия денег из диспенсера.',
+                        CupertinoColors.systemRed,
                       ),
                     ],
                   ),

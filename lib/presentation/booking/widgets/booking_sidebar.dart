@@ -1,0 +1,131 @@
+// ============================================
+// lib/presentation/booking/widgets/booking_sidebar.dart
+// ============================================
+
+import 'package:flutter/cupertino.dart';
+import 'package:motel/domain/models/booking_models.dart';
+
+class BookingSidebar extends StatelessWidget {
+  final List<BookingStep> steps;
+  final int currentStepIndex;
+
+  const BookingSidebar({
+    super.key,
+    required this.steps,
+    required this.currentStepIndex,
+  });
+
+  String _getStepTitle(BookingStep step) {
+    switch (step) {
+      case BookingStep.roomSelection:
+        return 'Выбор комнаты';
+      case BookingStep.guestInfo:
+        return 'Данные гостя';
+      case BookingStep.bookingType:
+        return 'Тип бронирования';
+      case BookingStep.period:
+        return 'Период проживания';
+      case BookingStep.service:
+        return 'Дополнительные услуги';
+      case BookingStep.payment:
+        return 'Способ оплаты';
+      case BookingStep.confirmation:
+        return 'Подтверждение';
+      case BookingStep.success:
+        return 'Завершено';
+    }
+  }
+
+  IconData _getStepIcon(BookingStep step) {
+    switch (step) {
+      case BookingStep.roomSelection:
+        return CupertinoIcons.bed_double_fill;
+      case BookingStep.guestInfo:
+        return CupertinoIcons.person_fill;
+      case BookingStep.bookingType:
+        return CupertinoIcons.doc_text_fill;
+      case BookingStep.period:
+        return CupertinoIcons.calendar;
+      case BookingStep.service:
+        return CupertinoIcons.star_fill;
+      case BookingStep.payment:
+        return CupertinoIcons.creditcard_fill;
+      case BookingStep.confirmation:
+        return CupertinoIcons.checkmark_circle_fill;
+      case BookingStep.success:
+        return CupertinoIcons.checkmark_seal_fill;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displaySteps = steps.where((s) => s != BookingStep.success).toList();
+
+    return Container(
+      width: 280,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Этапы бронирования',
+            style: TextStyle(
+              color: CupertinoColors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ...List.generate(displaySteps.length, (index) {
+            final step = displaySteps[index];
+            final isActive = index == currentStepIndex;
+            final isCompleted = index < currentStepIndex;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? CupertinoColors.activeBlue
+                          : isCompleted
+                          ? CupertinoColors.activeGreen
+                          : const Color(0xFF2C2C2E),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      isCompleted ? CupertinoIcons.checkmark : _getStepIcon(step),
+                      color: CupertinoColors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _getStepTitle(step),
+                      style: TextStyle(
+                        color: isActive
+                            ? CupertinoColors.white
+                            : CupertinoColors.systemGrey,
+                        fontSize: 15,
+                        fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}

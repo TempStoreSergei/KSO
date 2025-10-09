@@ -4,19 +4,42 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'keyboard_notifier.dart';
 
-class CustomKeyboard extends StatelessWidget {
+class CustomKeyboard extends StatefulWidget {
   final Function(String) onKeyPressed;
 
   const CustomKeyboard({super.key, required this.onKeyPressed});
 
   @override
+  State<CustomKeyboard> createState() => _CustomKeyboardState();
+}
+
+class _CustomKeyboardState extends State<CustomKeyboard> {
+  bool _isRussian = true; // true = русский, false = английский
+
+  @override
   Widget build(BuildContext context) {
-    final List<List<String>> keys = [
+    // Ряд с цифрами (одинаковый для обеих раскладок)
+    final List<String> numberRow = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+
+    // Русская раскладка
+    final List<List<String>> russianKeys = [
+      numberRow,
       ['й', 'ц', 'у', 'к', 'е', 'н', 'г', 'ш', 'щ', 'з', 'х', 'ъ'],
       ['ф', 'ы', 'в', 'а', 'п', 'р', 'о', 'л', 'д', 'ж', 'э'],
       ['SHIFT', 'я', 'ч', 'с', 'м', 'и', 'т', 'ь', 'б', 'ю', 'BACKSPACE'],
       ['TAB', 'SPACE', 'LANG'],
     ];
+
+    // Английская раскладка
+    final List<List<String>> englishKeys = [
+      numberRow,
+      ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+      ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+      ['SHIFT', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'BACKSPACE'],
+      ['TAB', 'SPACE', 'LANG'],
+    ];
+
+    final keys = _isRussian ? russianKeys : englishKeys;
 
     return Consumer<KeyboardNotifier>(
       builder: (context, notifier, child) {
@@ -31,10 +54,13 @@ class CustomKeyboard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24.0),
               ),
               child: Column(
-                children: keys.map((row) {
+                children: keys.asMap().entries.map((entry) {
+                  int rowIndex = entry.key;
+                  List<String> row = entry.value;
+
                   return Padding(
                     padding: EdgeInsets.only(
-                      left: (row.contains('ф') || row.contains('я')) ? 36.0 : 0.0,
+                      left: (row.contains('ф') || row.contains('я') || row.contains('a') || row.contains('z')) ? 36.0 : 0.0,
                       bottom: 12.0,
                     ),
                     child: Row(
@@ -54,11 +80,13 @@ class CustomKeyboard extends StatelessWidget {
   }
 
   Widget _buildKey(BuildContext context, String key, bool isShiftEnabled) {
-    final bool isLetterKey = key.length == 1;
+    final bool isLetterKey = key.length == 1 && !_isDigit(key);
+    final bool isDigitKey = _isDigit(key);
     final bool isSpaceKey = key == 'SPACE';
     final bool isTabOrLangKey = key == 'TAB' || key == 'LANG';
 
     final Color letterKeyColor = Colors.white.withOpacity(0.35);
+    final Color digitKeyColor = Colors.white.withOpacity(0.25);
     final Color specialKeyColor = Colors.black.withOpacity(0.25);
 
     Widget keyChild;
@@ -76,10 +104,13 @@ class CustomKeyboard extends StatelessWidget {
         keyChild = const Icon(CupertinoIcons.arrow_right_to_line, color: Colors.white, size: 28);
         break;
       case 'LANG':
-        keyChild = const Icon(CupertinoIcons.globe, color: Colors.white, size: 28);
+        keyChild = Text(
+          _isRussian ? 'EN' : 'RU',
+          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+        );
         break;
       default:
-        final text = isShiftEnabled ? key.toUpperCase() : key.toLowerCase();
+        final text = isShiftEnabled && !isDigitKey ? key.toUpperCase() : key.toLowerCase();
         keyChild = Text(text, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w400));
     }
 
@@ -88,25 +119,42 @@ class CustomKeyboard extends StatelessWidget {
     else if (isTabOrLangKey) keyWidth = 84.0;
     else keyWidth = 60.0;
 
+    Color keyColor;
+    if (isLetterKey) keyColor = letterKeyColor;
+    else if (isDigitKey) keyColor = digitKeyColor;
+    else keyColor = specialKeyColor;
+
     return Container(
       width: keyWidth,
       height: 60.0,
       margin: const EdgeInsets.all(6.0),
       decoration: BoxDecoration(
-        color: isLetterKey ? letterKeyColor : specialKeyColor,
-        shape: isLetterKey ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: isLetterKey ? null : const BorderRadius.all(Radius.circular(50)),
+        color: keyColor,
+        shape: (isLetterKey || isDigitKey) ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: (isLetterKey || isDigitKey) ? null : const BorderRadius.all(Radius.circular(50)),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           highlightColor: Colors.white.withOpacity(0.2),
           splashColor: Colors.transparent,
-          borderRadius: BorderRadius.circular(isLetterKey ? 30 : 50),
-          onTap: () => onKeyPressed(key),
+          borderRadius: BorderRadius.circular((isLetterKey || isDigitKey) ? 30 : 50),
+          onTap: () {
+            if (key == 'LANG') {
+              setState(() {
+                _isRussian = !_isRussian;
+              });
+            } else {
+              widget.onKeyPressed(key);
+            }
+          },
           child: Center(child: keyChild),
         ),
       ),
     );
+  }
+
+  bool _isDigit(String key) {
+    return key.length == 1 && int.tryParse(key) != null;
   }
 }

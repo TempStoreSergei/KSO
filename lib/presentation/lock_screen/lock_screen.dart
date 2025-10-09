@@ -1,5 +1,3 @@
-// lib/presentation/lock_screen/lock_screen.dart
-
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
@@ -7,11 +5,64 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:motel/core/api/api_client.dart';
-import 'package:motel/data/repositories/screensaver_repository_impl.dart';
-import 'package:motel/domain/entities/screensaver_file.dart';
-import 'package:motel/domain/usecases/get_screensaver_files.dart';
-import 'package:motel/presentation/guest_info_screen.dart';
+import 'package:motel/presentation/booking/room_booking_screen.dart';
 import 'package:motel/presentation/admin_login/admin_login_screen.dart';
+
+// Модели данных
+class ScreensaverFile {
+  final int id;
+  final int order;
+  final String fileUrl;
+  final bool soundIsEnable;
+  final int timeShowImage;
+  final String fileType;
+
+  ScreensaverFile({
+    required this.id,
+    required this.order,
+    required this.fileUrl,
+    required this.soundIsEnable,
+    required this.timeShowImage,
+    required this.fileType,
+  });
+
+  factory ScreensaverFile.fromJson(Map<String, dynamic> json) {
+    return ScreensaverFile(
+      id: json['id'] ?? 0,
+      order: json['order'] ?? 0,
+      fileUrl: json['fileUrl'] ?? '',
+      soundIsEnable: json['soundIsEnable'] ?? false,
+      timeShowImage: json['timeShowImage'] ?? 200,
+      fileType: json['fileType'] ?? '',
+    );
+  }
+}
+
+class ScreensaverSettings {
+  final bool isEnable;
+  final bool soundIsEnable;
+  final int timeShowImage;
+  final int idleTime;
+  final bool showClock;
+
+  ScreensaverSettings({
+    required this.isEnable,
+    required this.soundIsEnable,
+    required this.timeShowImage,
+    required this.idleTime,
+    required this.showClock,
+  });
+
+  factory ScreensaverSettings.fromJson(Map<String, dynamic> json) {
+    return ScreensaverSettings(
+      isEnable: json['isEnable'] ?? false,
+      soundIsEnable: json['soundIsEnable'] ?? false,
+      timeShowImage: json['timeShowImage'] ?? 200,
+      idleTime: json['idleTime'] ?? 100,
+      showClock: json['showClock'] ?? true,
+    );
+  }
+}
 
 class LockScreen extends StatefulWidget {
   const LockScreen({super.key});
@@ -21,8 +72,13 @@ class LockScreen extends StatefulWidget {
 }
 
 class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
-  late Future<List<ScreensaverFile>> _screensaverFilesFuture;
+  final ApiClient _apiClient = ApiClient.instance;
   final PageController _pageController = PageController();
+
+  List<ScreensaverFile>? _files;
+  ScreensaverSettings? _settings;
+  bool _isLoading = true;
+
   double _slideProgress = 0.0;
   double _dragOffset = 0.0;
   late AnimationController _arrowAnimationController;
@@ -32,18 +88,15 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   late Timer _clockTimer;
   late DateTime _currentTime;
 
-  // --- ИЗМЕНЕНИЯ ДЛЯ АВТОПРОКРУТКИ ---
   Timer? _pageChangeTimer;
   int _currentPage = 0;
-  int _totalPageCount = 0;
-  // ------------------------------------
 
   @override
   void initState() {
     super.initState();
     print("[LockScreen | initState] Экран инициализируется...");
 
-    _loadScreensaverFiles();
+    _loadScreensaverData();
 
     _currentTime = DateTime.now();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -54,7 +107,10 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       }
     });
 
-    _arrowAnimationController = AnimationController(vsync: this, duration: const Duration(seconds: 1));
+    _arrowAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
     _arrowAnimation = Tween<double>(begin: 0, end: 5).animate(
       CurvedAnimation(parent: _arrowAnimationController, curve: Curves.easeInOut),
     )..addStatusListener((status) {
@@ -64,12 +120,44 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     _arrowAnimationController.forward();
   }
 
-  void _loadScreensaverFiles() {
-    print("[LockScreen | _loadScreensaverFiles] Начинаю процесс загрузки файлов заставки...");
-    final getScreensaverFilesUseCase = GetScreensaverFiles(
-      ScreensaverRepositoryImpl(ApiClient.instance),
-    );
-    _screensaverFilesFuture = getScreensaverFilesUseCase.call();
+  Future<void> _loadScreensaverData() async {
+    try {
+      print("[LockScreen | _loadScreensaverData] Начинаю загрузку данных заставки...");
+
+      // Загружаем файлы
+      final filesResponse = await _apiClient.get('/screensaver/get_files');
+      final filesList = (filesResponse['files'] as List)
+          .map((json) => ScreensaverFile.fromJson(json))
+          .toList();
+
+      // Сортируем по order
+      filesList.sort((a, b) => a.order.compareTo(b.order));
+
+      // Загружаем настройки
+      final settingsResponse = await _apiClient.get('/screensaver/get_settings');
+      final settings = ScreensaverSettings.fromJson(settingsResponse);
+
+      if (mounted) {
+        setState(() {
+          _files = filesList;
+          _settings = settings;
+          _isLoading = false;
+        });
+
+        // Запускаем автопрокрутку если есть файлы и заставка включена
+        if (filesList.isNotEmpty && settings.isEnable) {
+          print("[LockScreen | _loadScreensaverData] УСПЕХ. Загружено ${filesList.length} файлов. ЗАПУСКАЮ ТАЙМЕР.");
+          _startPageChangeTimer();
+        }
+      }
+    } catch (e) {
+      print("[LockScreen | _loadScreensaverData] Ошибка загрузки: $e");
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -79,19 +167,32 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     _arrowAnimationController.dispose();
     _clockTimer.cancel();
     _secretTapTimer?.cancel();
-    _pageChangeTimer?.cancel(); // <-- ИЗМЕНЕНИЕ: Останавливаем таймер прокрутки
+    _pageChangeTimer?.cancel();
     super.dispose();
   }
 
-  // --- НОВЫЕ МЕТОДЫ ДЛЯ АВТОПРОКРУТКИ ---
-  /// Запускает таймер автоматического перелистывания страниц.
   void _startPageChangeTimer() {
-    _pageChangeTimer?.cancel(); // Отменяем старый таймер, если он есть
-    _pageChangeTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      _currentPage++;
-      if (_currentPage >= _totalPageCount) {
-        _currentPage = 0; // Возвращаемся на первую страницу
+    _pageChangeTimer?.cancel();
+
+    if (_files == null || _files!.isEmpty) return;
+
+    // Получаем текущий файл по индексу
+    final currentFileIndex = _currentPage % _files!.length;
+    final currentFile = _files![currentFileIndex];
+
+    // Используем время показа текущего файла
+    final duration = Duration(seconds: currentFile.timeShowImage);
+
+    print("[LockScreen | _startPageChangeTimer] Устанавливаю таймер на ${currentFile.timeShowImage} секунд для файла #$currentFileIndex");
+
+    _pageChangeTimer = Timer(duration, () {
+      if (_files == null || _files!.isEmpty || !mounted) {
+        return;
       }
+
+      print("[LockScreen | _startPageChangeTimer] Таймер сработал! Переключаю страницу.");
+
+      _currentPage++;
 
       if (_pageController.hasClients) {
         _pageController.animateToPage(
@@ -103,15 +204,14 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     });
   }
 
-  /// Перезапускает таймер при ручном скролле.
   void _onPageChanged(int page) {
+    print("[LockScreen | _onPageChanged] Страница изменена на: $page");
     setState(() {
       _currentPage = page;
     });
-    // Перезапускаем таймер, чтобы отсчет 5 секунд начался заново
+    // Перезапускаем таймер с новым временем для нового файла
     _startPageChangeTimer();
   }
-  // ------------------------------------------
 
   void _onPointerMove(PointerMoveEvent details, double sliderWidth) {
     if (details.buttons == kPrimaryMouseButton) {
@@ -125,18 +225,17 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   void _onPointerUp(PointerUpEvent details) {
     if (_slideProgress > 0.8) {
       print("[LockScreen | _onPointerUp] Экран разблокирован.");
-      _pageChangeTimer?.cancel(); // <-- ИЗМЕНЕНИЕ: Останавливаем прокрутку при переходе
+      _pageChangeTimer?.cancel();
       Navigator.of(context).push(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => GuestInfoScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) => RoomBookingScreen(),
           transitionDuration: const Duration(milliseconds: 600),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
         ),
       ).then((_) {
-        // <-- ИЗМЕНЕНИЕ: Возобновляем прокрутку, если вернулись на экран
-        if(mounted) _startPageChangeTimer();
+        if (mounted) _startPageChangeTimer();
       });
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
@@ -163,17 +262,16 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       _secretTapTimer?.cancel();
       _secretTapCount = 0;
       print("[LockScreen | _handleSecretTap] Вход в админ-панель активирован.");
-      _pageChangeTimer?.cancel(); // <-- ИЗМЕНЕНИЕ: Останавливаем прокрутку при переходе
+      _pageChangeTimer?.cancel();
       Navigator.of(context).push(
         MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
       ).then((_) {
-        // <-- ИЗМЕНЕНИЕ: Возобновляем прокрутку, если вернулись на экран
-        if(mounted) _startPageChangeTimer();
+        if (mounted) _startPageChangeTimer();
       });
     } else {
       _secretTapTimer = Timer(const Duration(seconds: 2), () {
-        if(mounted) {
-          print("[LockScreen | _handleSecretTap] Таймер сработал, сбрасываю счетчик нажатий.");
+        if (mounted) {
+          print("[LockScreen | _handleSecretTap] Таймер сброса счетчика сработал.");
           setState(() => _secretTapCount = 0);
         }
       });
@@ -186,49 +284,14 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          FutureBuilder<List<ScreensaverFile>>(
-            future: _screensaverFilesFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                print("[LockScreen | FutureBuilder] Состояние: ЗАГРУЗКА (ConnectionState.waiting).");
-                return const Center(child: CupertinoActivityIndicator(radius: 20, color: Colors.white));
-              }
-              if (snapshot.hasError) {
-                print("[LockScreen | FutureBuilder] Состояние: ОШИБКА (snapshot.hasError).");
-                print(" >>>> Детали ошибки: ${snapshot.error}");
-                return _buildBackground('assets/images/hostel_social_area.jpg', isNetwork: false);
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                print("[LockScreen | FutureBuilder] Состояние: ДАННЫЕ ОТСУТСТВУЮТ или ПУСТЫ. Показываю локальную заглушку.");
-                return _buildBackground('assets/images/hostel_social_area.jpg', isNetwork: false);
-              }
-
-              final files = snapshot.data!;
-
-              // --- ИЗМЕНЕНИЕ: Запускаем таймер после успешной загрузки ---
-              if (_totalPageCount == 0) { // Запускаем только один раз
-                print("[LockScreen | FutureBuilder] УСПЕХ. Загружено ${files.length} файлов. ЗАПУСКАЮ ТАЙМЕР.");
-                _totalPageCount = files.length;
-                _startPageChangeTimer();
-              }
-              // --------------------------------------------------------
-
-              return PageView.builder(
-                controller: _pageController,
-                itemCount: files.length,
-                onPageChanged: _onPageChanged, // <-- ИЗМЕНЕНИЕ: Отслеживаем ручной скролл
-                itemBuilder: (context, index) {
-                  return _buildBackground(files[index].fullUrl, isNetwork: true);
-                },
-              );
-            },
-          ),
-          Center(
-            child: GestureDetector(
-              onTap: _handleSecretTap,
-              child: _buildHud(context),
+          _buildBackgroundContent(),
+          if (_settings?.showClock ?? true)
+            Center(
+              child: GestureDetector(
+                onTap: _handleSecretTap,
+                child: _buildHud(context),
+              ),
             ),
-          ),
           Positioned(
             bottom: 60,
             left: 0,
@@ -252,16 +315,43 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildBackgroundContent() {
+    if (_isLoading) {
+      print("[LockScreen | _buildBackgroundContent] Состояние: ЗАГРУЗКА.");
+      return const Center(
+        child: CupertinoActivityIndicator(radius: 20, color: Colors.white),
+      );
+    }
+
+    // Если заставка выключена или нет файлов - показываем заглушку
+    if (_settings?.isEnable == false || _files == null || _files!.isEmpty) {
+      print("[LockScreen | _buildBackgroundContent] Заставка выключена или файлы отсутствуют. Показываю заглушку.");
+      return _buildBackground('assets/images/hostel_social_area.jpg', isNetwork: false);
+    }
+
+    return PageView.builder(
+      controller: _pageController,
+      itemCount: null, // Бесконечная прокрутка
+      onPageChanged: _onPageChanged,
+      itemBuilder: (context, index) {
+        final actualIndex = index % _files!.length;
+        return _buildBackground(_files![actualIndex].fileUrl, isNetwork: true);
+      },
+    );
+  }
+
   Widget _buildBackground(String path, {required bool isNetwork}) {
-    ImageProvider imageProvider = isNetwork ? NetworkImage(path) : AssetImage(path);
+    ImageProvider imageProvider = isNetwork ? NetworkImage(path) : AssetImage(path) as ImageProvider;
     return Container(
       decoration: BoxDecoration(
         image: DecorationImage(
           image: imageProvider,
           fit: BoxFit.cover,
-          onError: isNetwork ? (exception, stackTrace) {
+          onError: isNetwork
+              ? (exception, stackTrace) {
             print("[LockScreen | _buildBackground] КРИТИЧЕСКАЯ ОШИБКА при загрузке сетевого изображения: $path. Ошибка: $exception");
-          } : null,
+          }
+              : null,
         ),
       ),
     );
@@ -344,7 +434,14 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Text('Потяни для разблокировки', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
+                  const Text(
+                    'Потяни для разблокировки',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),

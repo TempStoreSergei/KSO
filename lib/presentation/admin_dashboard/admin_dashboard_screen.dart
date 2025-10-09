@@ -6,10 +6,9 @@ import 'package:motel/presentation/settings/services_settings_screen.dart';
 import 'package:motel/presentation/settings/shift_settings_screen.dart';
 import 'package:motel/presentation/settings/bill_acceptor_settings_screen.dart';
 import 'package:motel/presentation/settings/bill_dispenser_settings_screen.dart';
-import 'package:motel/presentation/settings/bill_acceptor_test_screen.dart';
-import 'package:motel/presentation/settings/bill_dispenser_test_screen.dart';
+import 'package:motel/presentation/settings/acquiring_settings_screen.dart';
 
-// Временный класс-заглушка для экранов, которые еще не созданы.
+
 class DummyEditScreen extends StatelessWidget {
   final String title;
   const DummyEditScreen({super.key, required this.title});
@@ -108,12 +107,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   header: const Text('ОБОРУДОВАНИЕ'),
                   children: [
                     _buildNavigationTile(
-                      label: 'Рабочий стол',
-                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const DesktopBackgroundSettingsScreen())),
-                      icon: CupertinoIcons.desktopcomputer,
-                      iconColor: CupertinoColors.activeGreen,
-                    ),
-                    _buildNavigationTile(
                       label: 'Заставка',
                       onTap: () {
                         Navigator.of(context).push(
@@ -124,20 +117,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       iconColor: CupertinoColors.systemGrey,
                     ),
                     _buildNavigationTile(
-                      label: 'Услуги',
-                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ServicesSettingsScreen())),
-                      icon: CupertinoIcons.list_bullet,
-                      iconColor: CupertinoColors.systemBlue,
-                    ),
-                    _buildNavigationTile(
                       label: 'Фискальный накопитель',
                       onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const DummyEditScreen(title: 'Фискальный накопитель'))),
                       icon: CupertinoIcons.doc_text,
                       iconColor: CupertinoColors.systemGreen,
                     ),
                     _buildNavigationTile(
-                      label: 'Терминал оплаты',
-                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const DummyEditScreen(title: 'Терминал оплаты'))),
+                      label: 'Эквайринг',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const AcquiringSettingsScreen())),
                       icon: CupertinoIcons.creditcard,
                       iconColor: CupertinoColors.systemOrange,
                     ),
@@ -167,28 +154,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ShiftSettingsScreen())),
                       icon: CupertinoIcons.clock_fill,
                       iconColor: CupertinoColors.systemIndigo,
-                    ),
-                  ],
-                ),
-              ),
-
-              // БЛОК 3: ТЕСТИРОВАНИЕ
-              SliverToBoxAdapter(
-                child: CupertinoListSection.insetGrouped(
-                  header: const Text('ТЕСТИРОВАНИЕ'),
-                  footer: const Text('Проведите тестирование оборудования для проверки работоспособности.'),
-                  children: [
-                    _buildNavigationTile(
-                      label: 'Тест купюроприемника',
-                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const BillAcceptorTestScreen())),
-                      icon: CupertinoIcons.lab_flask,
-                      iconColor: CupertinoColors.systemPink,
-                    ),
-                    _buildNavigationTile(
-                      label: 'Тест диспенсера купюр',
-                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const BillDispenserTestScreen())),
-                      icon: CupertinoIcons.arrow_up_circle,
-                      iconColor: CupertinoColors.systemOrange,
                     ),
                   ],
                 ),

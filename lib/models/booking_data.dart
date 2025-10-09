@@ -7,6 +7,6 @@ class BookingData {
 
   // Данные по умолчанию для номера
   final String corpus = 'Люкс';
-  final String roomNumber = '1205';
+  final String roomId = '1205';
   final String bedNumber = '01';
 }

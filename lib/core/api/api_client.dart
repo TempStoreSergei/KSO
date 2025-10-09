@@ -5,33 +5,62 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:motel/core/services/token_service.dart';
+import 'package:cookie_jar/cookie_jar.dart';
 import 'api_exceptions.dart';
 
 class ApiClient {
-  ApiClient._privateConstructor();
+  ApiClient._privateConstructor() {
+    _cookieJar = CookieJar();
+  }
   static final ApiClient instance = ApiClient._privateConstructor();
 
   final String _baseUrl = dotenv.env['BASE_URL']!;
-  final TokenService _tokenService = TokenService();
+  late final CookieJar _cookieJar;
 
-  Future<Map<String, String>> _getHeaders() async {
-    final token = await _tokenService.getToken();
+  Future<Map<String, String>> _getHeaders({Map<String, String>? customHeaders}) async {
     final headers = {
       'Content-Type': 'application/json',
       'accept': 'application/json',
     };
-    if (token != null) {
-      headers['Authorization'] = 'Bearer $token';
+
+    // Добавляем cookies из хранилища
+    final uri = Uri.parse(_baseUrl);
+    final cookies = await _cookieJar.loadForRequest(uri);
+    if (cookies.isNotEmpty) {
+      headers['Cookie'] = cookies.map((cookie) => '${cookie.name}=${cookie.value}').join('; ');
+    }
+
+    // Добавляем или перезаписываем кастомные заголовки
+    if (customHeaders != null) {
+      headers.addAll(customHeaders);
     }
     return headers;
   }
 
-  Future<dynamic> get(String path) async {
+  void _saveCookies(Uri uri, http.Response response) {
+    final setCookieHeader = response.headers['set-cookie'];
+    if (setCookieHeader != null) {
+      final cookies = setCookieHeader.split(',').map((str) {
+        return Cookie.fromSetCookieValue(str.trim());
+      }).toList();
+      _cookieJar.saveFromResponse(uri, cookies);
+    }
+  }
+
+  Future<dynamic> get(String path, {Map<String, dynamic>? params}) async {
     dynamic responseJson;
     try {
-      final url = Uri.parse(_baseUrl + path);
+      var url = Uri.parse(_baseUrl + path);
+
+      // Добавляем query parameters если они есть
+      if (params != null && params.isNotEmpty) {
+        url = url.replace(
+          queryParameters: params.map((key, value) => MapEntry(key, value.toString())),
+        );
+      }
+
       final response = await http.get(url, headers: await _getHeaders());
+      _saveCookies(url, response);
       responseJson = _processResponse(response);
     } on SocketException {
       throw FetchDataException('Нет интернет-соединения');
@@ -39,11 +68,24 @@ class ApiClient {
     return responseJson;
   }
 
-  Future<dynamic> post(String path, {Map<String, dynamic>? body}) async {
+  Future<dynamic> post(String path, {Map<String, dynamic>? body, Map<String, String>? headers}) async {
     dynamic responseJson;
     try {
       final url = Uri.parse(_baseUrl + path);
-      final response = await http.post(url, headers: await _getHeaders(), body: jsonEncode(body));
+      final requestHeaders = await _getHeaders(customHeaders: headers);
+
+      // Проверяем Content-Type и кодируем body соответственно
+      String requestBody;
+      if (requestHeaders['Content-Type'] == 'application/x-www-form-urlencoded') {
+        // Кодируем как URL-encoded
+        requestBody = body?.entries.map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value.toString())}').join('&') ?? '';
+      } else {
+        // Кодируем как JSON (по умолчанию)
+        requestBody = jsonEncode(body);
+      }
+
+      final response = await http.post(url, headers: requestHeaders, body: requestBody);
+      _saveCookies(url, response);
       responseJson = _processResponse(response);
     } on SocketException {
       throw FetchDataException('Нет интернет-соединения');
@@ -56,6 +98,7 @@ class ApiClient {
     try {
       final url = Uri.parse(_baseUrl + path);
       final response = await http.put(url, headers: await _getHeaders(), body: jsonEncode(body));
+      _saveCookies(url, response);
       responseJson = _processResponse(response);
     } on SocketException {
       throw FetchDataException('Нет интернет-соединения');
@@ -71,6 +114,7 @@ class ApiClient {
         ..headers.addAll(await _getHeaders())
         ..body = jsonEncode(body);
       final response = await http.Client().send(request).then((streamedResponse) => http.Response.fromStream(streamedResponse));
+      _saveCookies(url, response);
       responseJson = _processResponse(response);
     } on SocketException {
       throw FetchDataException('Нет интернет-соединения');
@@ -78,17 +122,18 @@ class ApiClient {
     return responseJson;
   }
 
-  // --- ИЗМЕНЕНИЕ: Метод теперь принимает XFile ---
   Future<dynamic> multipartPost(String path, XFile file) async {
     dynamic responseJson;
     try {
       final url = Uri.parse(_baseUrl + path);
       final request = http.MultipartRequest('POST', url);
 
-      final token = await _tokenService.getToken();
       request.headers['accept'] = 'application/json';
-      if (token != null) {
-        request.headers['Authorization'] = 'Bearer $token';
+
+      // Добавляем cookies
+      final cookies = await _cookieJar.loadForRequest(url);
+      if (cookies.isNotEmpty) {
+        request.headers['Cookie'] = cookies.map((cookie) => '${cookie.name}=${cookie.value}').join('; ');
       }
 
       if (kIsWeb) {
@@ -97,7 +142,9 @@ class ApiClient {
         request.files.add(await http.MultipartFile.fromPath('file_data', file.path));
       }
 
-      final response = await http.Response.fromStream(await request.send());
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      _saveCookies(url, response);
       responseJson = _processResponse(response);
     } on SocketException {
       throw FetchDataException('Нет интернет-соединения');
@@ -105,11 +152,21 @@ class ApiClient {
     return responseJson;
   }
 
+  // Метод для выхода (очистка cookies)
+  Future<void> logout() async {
+    await _cookieJar.deleteAll();
+  }
+
   dynamic _processResponse(http.Response response) {
     switch (response.statusCode) {
       case 200:
       case 201:
-        return jsonDecode(utf8.decode(response.bodyBytes));
+        final responseBody = utf8.decode(response.bodyBytes);
+        // Если ответ пустой, возвращаем пустой объект
+        if (responseBody.isEmpty) {
+          return {};
+        }
+        return jsonDecode(responseBody);
       case 400:
         throw BadRequestException(utf8.decode(response.bodyBytes));
       case 401:
