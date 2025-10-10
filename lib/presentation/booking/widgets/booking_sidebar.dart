@@ -17,16 +17,18 @@ class BookingSidebar extends StatelessWidget {
 
   String _getStepTitle(BookingStep step) {
     switch (step) {
+      case BookingStep.buildingSelection:
+        return 'Выбор корпуса';
       case BookingStep.roomSelection:
         return 'Выбор комнаты';
       case BookingStep.guestInfo:
         return 'Данные гостя';
-      case BookingStep.bookingType:
-        return 'Тип бронирования';
+      case BookingStep.categorySelection:
+        return 'Категория';
       case BookingStep.period:
         return 'Период проживания';
-      case BookingStep.service:
-        return 'Дополнительные услуги';
+      case BookingStep.itemSelection:
+        return 'Выбор услуг';
       case BookingStep.payment:
         return 'Способ оплаты';
       case BookingStep.confirmation:
@@ -38,16 +40,18 @@ class BookingSidebar extends StatelessWidget {
 
   IconData _getStepIcon(BookingStep step) {
     switch (step) {
+      case BookingStep.buildingSelection:
+        return CupertinoIcons.building_2_fill;
       case BookingStep.roomSelection:
         return CupertinoIcons.bed_double_fill;
       case BookingStep.guestInfo:
         return CupertinoIcons.person_fill;
-      case BookingStep.bookingType:
-        return CupertinoIcons.doc_text_fill;
+      case BookingStep.categorySelection:
+        return CupertinoIcons.square_grid_2x2_fill;
       case BookingStep.period:
         return CupertinoIcons.calendar;
-      case BookingStep.service:
-        return CupertinoIcons.star_fill;
+      case BookingStep.itemSelection:
+        return CupertinoIcons.checkmark_square_fill;
       case BookingStep.payment:
         return CupertinoIcons.creditcard_fill;
       case BookingStep.confirmation:

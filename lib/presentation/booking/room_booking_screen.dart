@@ -5,13 +5,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:motel/domain/models/booking_models.dart';
 import 'package:motel/presentation/booking/widgets/booking_sidebar.dart';
-import 'package:motel/presentation/booking/widgets/step_booking_type.dart';
+import 'package:motel/presentation/booking/widgets/step_building_selection.dart';
+import 'package:motel/presentation/booking/widgets/step_category_selection.dart';
 import 'package:motel/presentation/booking/widgets/step_confirmation.dart';
 import 'package:motel/presentation/booking/widgets/step_guest_info.dart';
+import 'package:motel/presentation/booking/widgets/step_item_selection.dart';
 import 'package:motel/presentation/booking/widgets/step_payment.dart';
 import 'package:motel/presentation/booking/widgets/step_period.dart';
 import 'package:motel/presentation/booking/widgets/step_room_selection.dart';
-import 'package:motel/presentation/booking/widgets/step_service_selection.dart';
 import 'package:motel/presentation/booking/widgets/step_success.dart';
 import 'package:motel/presentation/guest_info/custom_keyboard.dart';
 import 'package:motel/presentation/guest_info/keyboard_notifier.dart';
@@ -98,16 +99,25 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
 
   List<BookingStep> get steps {
     final stepList = [
+      BookingStep.buildingSelection,
       BookingStep.roomSelection,
       BookingStep.guestInfo,
-      BookingStep.bookingType,
+      BookingStep.categorySelection,
     ];
-    if (_bookingData.bookingType == BookingType.accommodation) {
+
+    // Для проживания добавляем только выбор периода (БЕЗ выбора услуг)
+    if (_bookingData.selectedCategory == BookingCategory.accommodation) {
       stepList.add(BookingStep.period);
-    } else if (_bookingData.bookingType == BookingType.serviceOnly) {
-      stepList.add(BookingStep.service);
     }
+    // Для услуг и штрафов добавляем выбор элементов
+    else if (_bookingData.selectedCategory == BookingCategory.services ||
+        _bookingData.selectedCategory == BookingCategory.ruleViolationPenalty ||
+        _bookingData.selectedCategory == BookingCategory.propertyDamagePenalty) {
+      stepList.add(BookingStep.itemSelection);
+    }
+
     stepList.addAll([BookingStep.payment, BookingStep.confirmation]);
+
     if (_isBookingSuccessful) {
       stepList.add(BookingStep.success);
     }
@@ -118,17 +128,20 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
 
   bool _canProceed() {
     switch (_currentStep) {
+      case BookingStep.buildingSelection:
+        return _bookingData.selectedBuilding != null;
       case BookingStep.roomSelection:
         return _bookingData.selectedRoom != null;
       case BookingStep.guestInfo:
         return (_bookingData.lastName?.isNotEmpty ?? false) &&
             (_bookingData.firstName?.isNotEmpty ?? false);
-      case BookingStep.bookingType:
-        return _bookingData.bookingType != BookingType.unknown;
+      case BookingStep.categorySelection:
+        return _bookingData.selectedCategory != BookingCategory.unknown;
       case BookingStep.period:
-        return true;
-      case BookingStep.service:
-        return _bookingData.selectedService != null;
+        return true; // Даты всегда установлены по умолчанию
+      case BookingStep.itemSelection:
+        // Для услуг и штрафов хотя бы один элемент обязателен
+        return _bookingData.selectedItems.isNotEmpty;
       case BookingStep.payment:
         return _bookingData.paymentMethod != null;
       case BookingStep.confirmation:
@@ -153,9 +166,14 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
 
   void _previousStep() {
     if (_currentStepIndex > 0) {
-      if (_currentStep == BookingStep.period || _currentStep == BookingStep.service) {
-        _bookingData.bookingType = BookingType.unknown;
+      // Очищаем данные при возврате на предыдущие шаги
+      if (_currentStep == BookingStep.itemSelection) {
+        _bookingData.selectedItems.clear();
+      } else if (_currentStep == BookingStep.categorySelection) {
+        _bookingData.selectedCategory = BookingCategory.unknown;
+        _bookingData.selectedItems.clear();
       }
+
       setState(() => _currentStepIndex--);
 
       // Устанавливаем фокус когда возвращаемся на экран гостя
@@ -196,7 +214,11 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
     final bool showBottomBar = _currentStep != BookingStep.confirmation &&
         _currentStep != BookingStep.success;
     final bool showSidebar = _currentStep != BookingStep.success;
-    final bool showKeyboard = _currentStep == BookingStep.guestInfo;
+    final bool showKeyboard = _currentStep == BookingStep.guestInfo ||
+        (_currentStep == BookingStep.itemSelection &&
+         (_bookingData.selectedCategory == BookingCategory.services ||
+          _bookingData.selectedCategory == BookingCategory.ruleViolationPenalty ||
+          _bookingData.selectedCategory == BookingCategory.propertyDamagePenalty));
 
     return ChangeNotifierProvider.value(
       value: _keyboardNotifier,
@@ -354,11 +376,18 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
 
   Widget _buildCurrentStepWidget() {
     switch (_currentStep) {
+      case BookingStep.buildingSelection:
+        return StepBuildingSelection(
+          key: const ValueKey('building'),
+          selectedBuilding: _bookingData.selectedBuilding,
+          onBuildingSelected: (building) => setState(() => _bookingData.selectedBuilding = building),
+        );
       case BookingStep.roomSelection:
         return StepRoomSelection(
           key: const ValueKey('room'),
           onRoomSelected: (room) => setState(() => _bookingData.selectedRoom = room),
           selectedRoom: _bookingData.selectedRoom,
+          selectedBuilding: _bookingData.selectedBuilding,
         );
       case BookingStep.guestInfo:
         return StepGuestInfo(
@@ -376,11 +405,14 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
           middleNameFocusNode: _middleNameFocusNode,
           focusedFieldIndex: _focusedFieldIndex,
         );
-      case BookingStep.bookingType:
-        return StepBookingType(
-          key: const ValueKey('type'),
-          selectedType: _bookingData.bookingType,
-          onTypeSelected: (type) => setState(() => _bookingData.bookingType = type),
+      case BookingStep.categorySelection:
+        return StepCategorySelection(
+          key: const ValueKey('category'),
+          selectedCategory: _bookingData.selectedCategory,
+          onCategorySelected: (category) => setState(() {
+            _bookingData.selectedCategory = category;
+            _bookingData.selectedItems.clear(); // Очищаем выбранные элементы при смене категории
+          }),
         );
       case BookingStep.period:
         return StepPeriod(
@@ -392,11 +424,12 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
             _bookingData.checkOutDate = checkOut;
           }),
         );
-      case BookingStep.service:
-        return StepServiceSelection(
-          key: const ValueKey('service'),
-          selectedService: _bookingData.selectedService,
-          onServiceSelected: (service) => setState(() => _bookingData.selectedService = service),
+      case BookingStep.itemSelection:
+        return StepItemSelection(
+          key: const ValueKey('items'),
+          category: _bookingData.selectedCategory,
+          selectedItems: _bookingData.selectedItems,
+          onItemsChanged: (items) => setState(() => _bookingData.selectedItems = items),
         );
       case BookingStep.payment:
         return StepPayment(

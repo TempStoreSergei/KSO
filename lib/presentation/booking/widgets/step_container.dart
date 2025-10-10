@@ -2,16 +2,16 @@
 import 'package:flutter/cupertino.dart';
 
 class StepContainer extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final Widget child;
 
   const StepContainer({
     super.key,
-    required this.icon,
+    this.icon,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.child,
   });
 
@@ -21,30 +21,34 @@ class StepContainer extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 450), // Немного увеличим макс. ширину
       child: Column(
         children: [
-          Container(
-            // === ИЗМЕНЕНИЕ: Увеличен размер иконки и контейнера ===
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: CupertinoColors.activeBlue.withOpacity(0.15),
+          if (icon != null) ...[
+            Container(
+              // === ИЗМЕНЕНИЕ: Увеличен размер иконки и контейнера ===
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: CupertinoColors.activeBlue.withOpacity(0.15),
+              ),
+              child: Icon(icon, size: 60, color: CupertinoColors.activeBlue),
             ),
-            child: Icon(icon, size: 60, color: CupertinoColors.activeBlue),
-          ),
-          const SizedBox(height: 28),
+            const SizedBox(height: 28),
+          ],
           Text(
             title,
             textAlign: TextAlign.center,
             // === ИЗМЕНЕНИЕ: Увеличен шрифт заголовка ===
             style: const TextStyle(color: CupertinoColors.white, fontSize: 32, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 12),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            // === ИЗМЕНЕНИЕ: Увеличен шрифт подзаголовка ===
-            style: const TextStyle(color: CupertinoColors.systemGrey, fontSize: 17),
-          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              subtitle!,
+              textAlign: TextAlign.center,
+              // === ИЗМЕНЕНИЕ: Увеличен шрифт подзаголовка ===
+              style: const TextStyle(color: CupertinoColors.systemGrey, fontSize: 17),
+            ),
+          ],
           const SizedBox(height: 36),
           child,
         ],

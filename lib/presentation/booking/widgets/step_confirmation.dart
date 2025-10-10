@@ -60,21 +60,33 @@ class _StepConfirmationState extends State<StepConfirmation> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _buildInfoRow('Корпус:', widget.data.selectedBuilding?.name ?? 'Не выбран'),
                 _buildInfoRow('Комната:', widget.data.selectedRoom?.name ?? 'Не выбрана'),
                 _buildInfoRow('Гость:', '${widget.data.lastName} ${widget.data.firstName}'),
-                if (widget.data.bookingType == BookingType.accommodation) ...[
-                  const SizedBox(height: 12),
+                const SizedBox(height: 12),
+                _buildInfoRow('Категория:', _getCategoryName(widget.data.selectedCategory)),
+                if (widget.data.selectedCategory == BookingCategory.accommodation) ...[
                   _buildInfoRow('Заезд:', DateFormat('dd.MM.yyyy', 'ru').format(widget.data.checkInDate)),
                   _buildInfoRow('Выезд:', DateFormat('dd.MM.yyyy', 'ru').format(widget.data.checkOutDate)),
                   _buildInfoRow('Ночей:', widget.data.totalNights.toString()),
                 ],
-                if (widget.data.bookingType == BookingType.serviceOnly) ...[
+                if (widget.data.selectedItems.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  _buildInfoRow('Услуга:', widget.data.selectedService?.name ?? 'Не выбрана'),
+                  const Text(
+                    'Выбранные услуги:',
+                    style: TextStyle(
+                      color: CupertinoColors.systemGrey,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...widget.data.selectedItems.map((item) =>
+                    _buildInfoRow('  ${item.name}', '${item.price} ₽')
+                  ),
                 ],
                 const SizedBox(height: 12),
                 _buildInfoRow('Оплата:', widget.data.paymentMethod ?? 'Не выбран'),
-                const SizedBox(height: 20),
                 const SizedBox(height: 20),
                 _buildInfoRow('ИТОГО:', '${widget.data.totalPrice} ₽', isTotal: true),
               ],
@@ -103,6 +115,21 @@ class _StepConfirmationState extends State<StepConfirmation> {
         ],
       ),
     );
+  }
+
+  String _getCategoryName(BookingCategory category) {
+    switch (category) {
+      case BookingCategory.accommodation:
+        return 'Проживание';
+      case BookingCategory.services:
+        return 'Услуги';
+      case BookingCategory.ruleViolationPenalty:
+        return 'Штраф за нарушение правил';
+      case BookingCategory.propertyDamagePenalty:
+        return 'Штраф за порчу имущества';
+      case BookingCategory.unknown:
+        return 'Не выбрано';
+    }
   }
 
   Widget _buildInfoRow(String title, String value, {bool isTotal = false}) {

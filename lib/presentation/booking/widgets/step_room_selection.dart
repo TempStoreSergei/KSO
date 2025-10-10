@@ -12,8 +12,14 @@ import 'package:motel/presentation/booking/widgets/step_container.dart';
 class StepRoomSelection extends StatefulWidget {
   final Function(Room) onRoomSelected;
   final Room? selectedRoom;
+  final Building? selectedBuilding;
 
-  const StepRoomSelection({super.key, required this.onRoomSelected, this.selectedRoom});
+  const StepRoomSelection({
+    super.key,
+    required this.onRoomSelected,
+    this.selectedRoom,
+    this.selectedBuilding,
+  });
 
   @override
   State<StepRoomSelection> createState() => _StepRoomSelectionState();
@@ -23,10 +29,12 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
   int _currentPage = 0;
   late int _totalPages;
   final int _gridSlots = 12;
+  RoomType _selectedRoomType = RoomType.all;
 
   // Состояние для хранения загруженных комнат
   late Future<List<Room>> _roomsFuture;
   List<Room> _allRooms = [];
+  List<Room> _filteredRooms = [];
 
   @override
   void initState() {
@@ -40,14 +48,30 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
     _roomsFuture = getRoomsUseCase.call();
   }
 
+  void _applyFilters() {
+    _filteredRooms = _allRooms.where((room) {
+      // Фильтр по корпусу
+      if (widget.selectedBuilding != null && room.buildingId != widget.selectedBuilding!.id) {
+        return false;
+      }
+      // Фильтр по типу комнаты
+      if (_selectedRoomType != RoomType.all && room.type != _selectedRoomType) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    _currentPage = 0; // Сбрасываем на первую страницу при фильтрации
+  }
+
   void _calculatePages() {
-    if (_allRooms.isEmpty) {
+    if (_filteredRooms.isEmpty) {
       _totalPages = 1;
       return;
     }
 
     // Для одной страницы - все слоты доступны
-    if (_allRooms.length <= _gridSlots) {
+    if (_filteredRooms.length <= _gridSlots) {
       _totalPages = 1;
       return;
     }
@@ -56,7 +80,7 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
     // Средние страницы: _gridSlots - 2 (минус обе кнопки)
     // Последняя страница: _gridSlots - 1 (минус кнопка назад)
 
-    int remainingRooms = _allRooms.length;
+    int remainingRooms = _filteredRooms.length;
     int pages = 0;
 
     // Первая страница
@@ -97,6 +121,58 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
     return startIndex;
   }
 
+  String _getRoomTypeLabel(RoomType type) {
+    switch (type) {
+      case RoomType.all:
+        return 'Все';
+      case RoomType.standard:
+        return 'Стандарт';
+      case RoomType.comfort:
+        return 'Комфорт';
+      case RoomType.lux:
+        return 'Люкс';
+      case RoomType.suite:
+        return 'Сюит';
+    }
+  }
+
+  Widget _buildRoomTypeFilter() {
+    return Container(
+      height: 40,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: RoomType.values.map((type) {
+          final isSelected = _selectedRoomType == type;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              minSize: 0,
+              color: isSelected ? CupertinoColors.activeBlue : const Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.circular(8),
+              onPressed: () {
+                setState(() {
+                  _selectedRoomType = type;
+                  _applyFilters();
+                  _calculatePages();
+                });
+              },
+              child: Text(
+                _getRoomTypeLabel(type),
+                style: TextStyle(
+                  color: isSelected ? CupertinoColors.white : CupertinoColors.systemGrey,
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildNavigationButton({required IconData icon, required VoidCallback onPressed}) {
     return GestureDetector(
       onTap: onPressed,
@@ -124,6 +200,7 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
           subtitle = '';
         } else {
           _allRooms = snapshot.data!;
+          _applyFilters();
           _calculatePages();
           subtitle = 'Страница ${_currentPage + 1} из $_totalPages';
         }
@@ -131,10 +208,18 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
         return StepContainer(
           icon: CupertinoIcons.bed_double_fill,
           title: 'Выберите комнату',
-          subtitle: subtitle,
-          child: SizedBox(
-            height: 300, // Увеличили высоту для размещения 3 рядов с новым aspect ratio
-            child: _buildContent(snapshot),
+          subtitle: widget.selectedBuilding != null
+              ? '${widget.selectedBuilding!.name} • $subtitle'
+              : subtitle,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildRoomTypeFilter(),
+              SizedBox(
+                height: 300,
+                child: _buildContent(snapshot),
+              ),
+            ],
           ),
         );
       },
@@ -167,6 +252,16 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
       );
     }
 
+    // 3.5. Если после фильтрации список пуст
+    if (_filteredRooms.isEmpty) {
+      return const Center(
+        child: Text(
+          'Нет комнат по выбранным фильтрам',
+          style: TextStyle(color: CupertinoColors.systemGrey),
+        ),
+      );
+    }
+
     // 4. Успешная загрузка - строим сетку
     final bool hasPrevPage = _currentPage > 0;
     final bool hasNextPage = _currentPage < _totalPages - 1;
@@ -179,9 +274,9 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
     if (hasPrevPage) availableSlots--;
     if (hasNextPage) availableSlots--;
 
-    final int roomEndIndex = min(roomStartIndex + availableSlots, _allRooms.length);
+    final int roomEndIndex = min(roomStartIndex + availableSlots, _filteredRooms.length);
 
-    final List<Room> roomsForThisPage = _allRooms.sublist(roomStartIndex, roomEndIndex);
+    final List<Room> roomsForThisPage = _filteredRooms.sublist(roomStartIndex, roomEndIndex);
 
     final List<dynamic> gridItems = [];
     if (hasPrevPage) gridItems.add('prev');

@@ -35,11 +35,11 @@ class SaveTransactionUseCase {
 
   // Вспомогательный метод для маппинга данных
   SaveTransactionRequest _mapBookingDataToRequest(BookingData data) {
-    // Собираем массив ID сервисов. Если сервис не выбран, массив будет пустым.
-    final List<int> serviceIds = [];
-    if (data.bookingType == BookingType.serviceOnly && data.selectedService != null) {
-      serviceIds.add(data.selectedService!.id);
-    }
+    // Собираем массив ID сервисов из выбранных элементов
+    final List<int> serviceIds = data.selectedItems
+        .map((item) => int.tryParse(item.id) ?? 0)
+        .where((id) => id != 0)
+        .toList();
 
     return SaveTransactionRequest(
       guest: GuestInfoRequest(

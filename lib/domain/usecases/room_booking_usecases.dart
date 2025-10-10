@@ -16,9 +16,9 @@ class RoomBookingUseCases {
     required String middleName,
     required DateTime checkIn,
     required DateTime checkOut,
-    String? serviceId,
+    required List<BookingItem> selectedItems,
+    required BookingCategory category,
     required String paymentMethod,
-    required BookingType bookingType,
   }) async {
     await _apiClient.post(
       '/bookings/create',
@@ -28,30 +28,29 @@ class RoomBookingUseCases {
         'middle_name': middleName,
         'check_in': checkIn.toIso8601String(),
         'check_out': checkOut.toIso8601String(),
-        if (serviceId != null) 'service_id': serviceId,
+        'selected_items': selectedItems.map((item) => {
+          'id': item.id,
+          'name': item.name,
+          'price': item.price,
+        }).toList(),
+        'category': _categoryToString(category),
         'payment_method': paymentMethod,
-        'booking_type': bookingType == BookingType.accommodation ? 'accommodation' : 'service_only',
       },
     );
   }
 
-  List<AdditionalService> getAvailableServices() {
-    return [
-      AdditionalService(
-        id: 'breakfast',
-        name: 'Завтрак',
-        price: 500,
-      ),
-      AdditionalService(
-        id: 'parking',
-        name: 'Парковка',
-        price: 300,
-      ),
-      AdditionalService(
-        id: 'spa',
-        name: 'СПА-услуги',
-        price: 1200,
-      ),
-    ];
+  String _categoryToString(BookingCategory category) {
+    switch (category) {
+      case BookingCategory.accommodation:
+        return 'accommodation';
+      case BookingCategory.services:
+        return 'services';
+      case BookingCategory.ruleViolationPenalty:
+        return 'rule_violation_penalty';
+      case BookingCategory.propertyDamagePenalty:
+        return 'property_damage_penalty';
+      case BookingCategory.unknown:
+        return 'unknown';
+    }
   }
 }
