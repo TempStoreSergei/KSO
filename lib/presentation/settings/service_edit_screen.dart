@@ -24,15 +24,22 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
 
   late TextEditingController _nameController;
   late TextEditingController _priceController;
-  late bool _isOneTime;
+  late int _tax;
+  late bool _isCountable;
+  late bool _isDuration;
   bool _isBusy = false;
+
+  // Доступные варианты налога
+  final List<int> _availableTaxes = [0, 10, 20];
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.service?.serviceName);
-    _priceController = TextEditingController(text: widget.service?.servicePrice?.toString() ?? '');
-    _isOneTime = widget.service?.serviceOneTime ?? true;
+    _nameController = TextEditingController(text: widget.service?.name);
+    _priceController = TextEditingController(text: widget.service?.price.toString() ?? '');
+    _tax = widget.service?.tax ?? 20;
+    _isCountable = widget.service?.isCountable ?? false;
+    _isDuration = widget.service?.isDuration ?? false;
   }
 
   @override
@@ -64,16 +71,20 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
       final bool success;
       if(widget.isEditing) {
         success = await _repository.updateService(
-            serviceID: widget.service!.serviceID,
+            serviceID: widget.service!.id.toString(),
             name: name,
             price: price,
-            isOneTime: _isOneTime
+            tax: _tax,
+            isCountable: _isCountable,
+            isDuration: _isDuration
         );
       } else {
         success = await _repository.createService(
             name: name,
             price: price,
-            isOneTime: _isOneTime
+            tax: _tax,
+            isCountable: _isCountable,
+            isDuration: _isDuration
         );
       }
 
@@ -87,6 +98,45 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
     });
   }
 
+  void _showTaxPicker() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (BuildContext context) => Container(
+        height: 216,
+        padding: const EdgeInsets.only(top: 6.0),
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        child: SafeArea(
+          top: false,
+          child: CupertinoPicker(
+            magnification: 1.22,
+            squeeze: 1.2,
+            useMagnifier: true,
+            itemExtent: 32.0,
+            scrollController: FixedExtentScrollController(
+              initialItem: _availableTaxes.indexOf(_tax),
+            ),
+            onSelectedItemChanged: (int selectedItem) {
+              setState(() {
+                _tax = _availableTaxes[selectedItem];
+              });
+            },
+            children: _availableTaxes.map((int tax) {
+              return Center(
+                child: Text(
+                  '$tax%',
+                  style: const TextStyle(fontSize: 22.0),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _onDelete() async {
     final confirmed = await _showConfirmationDialog(
         'Удалить услугу?', 'Это действие нельзя будет отменить.'
@@ -94,7 +144,7 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
     if(confirmed != true) return;
 
     await _runBusy(() async {
-      final success = await _repository.deleteService(serviceID: widget.service!.serviceID);
+      final success = await _repository.deleteService(serviceID: widget.service!.id.toString());
       if(mounted) {
         if(success) {
           // Выходим с результатом `true`, чтобы список обновился
@@ -147,13 +197,55 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
                         ],
                       ),
                       CupertinoFormSection.insetGrouped(
+                        header: const Text('НАЛОГ'),
+                        children: [
+                          CupertinoListTile(
+                            title: const Text('Ставка налога'),
+                            trailing: CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              onPressed: () => _showTaxPicker(),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '$_tax%',
+                                    style: const TextStyle(color: CupertinoColors.activeBlue),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(
+                                    CupertinoIcons.chevron_down,
+                                    size: 16,
+                                    color: CupertinoColors.activeBlue,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      CupertinoFormSection.insetGrouped(
                         header: const Text('ПАРАМЕТРЫ'),
                         children: [
                           CupertinoListTile(
-                            title: const Text('Разовая услуга'),
+                            title: const Text('Можно задать количество'),
+                            subtitle: const Text('Пользователь сможет выбрать количество единиц'),
                             trailing: CupertinoSwitch(
-                              value: _isOneTime,
-                              onChanged: (value) => setState(() => _isOneTime = value),
+                              value: _isCountable,
+                              onChanged: (value) => setState(() {
+                                _isCountable = value;
+                                if (value) _isDuration = false; // Взаимоисключающие
+                              }),
+                            ),
+                          ),
+                          CupertinoListTile(
+                            title: const Text('Услуга на количество дней'),
+                            subtitle: const Text('Пользователь сможет выбрать количество дней'),
+                            trailing: CupertinoSwitch(
+                              value: _isDuration,
+                              onChanged: (value) => setState(() {
+                                _isDuration = value;
+                                if (value) _isCountable = false; // Взаимоисключающие
+                              }),
                             ),
                           ),
                         ],

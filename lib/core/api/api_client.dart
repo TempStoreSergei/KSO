@@ -152,6 +152,20 @@ class ApiClient {
     return responseJson;
   }
 
+  // Метод для расчета цены проживания
+  Future<int> calculateRoomPrice({
+    required String roomType,
+    required int roomBuilding,
+    required int countDays,
+  }) async {
+    final response = await post('/guests/calculate_room_price', body: {
+      'roomType': roomType,
+      'roomBuilding': roomBuilding,
+      'countDays': countDays,
+    });
+    return response['summRoomRrice'] as int;
+  }
+
   // Метод для выхода (очистка cookies)
   Future<void> logout() async {
     await _cookieJar.deleteAll();
@@ -161,6 +175,7 @@ class ApiClient {
     switch (response.statusCode) {
       case 200:
       case 201:
+      case 204:
         final responseBody = utf8.decode(response.bodyBytes);
         // Если ответ пустой, возвращаем пустой объект
         if (responseBody.isEmpty) {

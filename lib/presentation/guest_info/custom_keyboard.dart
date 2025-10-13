@@ -6,8 +6,13 @@ import 'keyboard_notifier.dart';
 
 class CustomKeyboard extends StatefulWidget {
   final Function(String) onKeyPressed;
+  final bool showNumbers; // Флаг для отображения цифр
 
-  const CustomKeyboard({super.key, required this.onKeyPressed});
+  const CustomKeyboard({
+    super.key,
+    required this.onKeyPressed,
+    this.showNumbers = true, // По умолчанию показываем цифры
+  });
 
   @override
   State<CustomKeyboard> createState() => _CustomKeyboardState();
@@ -18,12 +23,12 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
 
   @override
   Widget build(BuildContext context) {
-    // Ряд с цифрами (одинаковый для обеих раскладок)
+    // Ряд с цифрами (если showNumbers = true)
     final List<String> numberRow = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
     // Русская раскладка
-    final List<List<String>> russianKeys = [
-      numberRow,
+    List<List<String>> russianKeys = [
+      if (widget.showNumbers) numberRow,
       ['й', 'ц', 'у', 'к', 'е', 'н', 'г', 'ш', 'щ', 'з', 'х', 'ъ'],
       ['ф', 'ы', 'в', 'а', 'п', 'р', 'о', 'л', 'д', 'ж', 'э'],
       ['SHIFT', 'я', 'ч', 'с', 'м', 'и', 'т', 'ь', 'б', 'ю', 'BACKSPACE'],
@@ -31,8 +36,8 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
     ];
 
     // Английская раскладка
-    final List<List<String>> englishKeys = [
-      numberRow,
+    List<List<String>> englishKeys = [
+      if (widget.showNumbers) numberRow,
       ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
       ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
       ['SHIFT', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'BACKSPACE'],
@@ -60,7 +65,7 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
 
                   return Padding(
                     padding: EdgeInsets.only(
-                      left: (row.contains('ф') || row.contains('я') || row.contains('a') || row.contains('z')) ? 36.0 : 0.0,
+                      left: (row.contains('ф') || row.contains('SHIFT') || row.contains('a')) ? 36.0 : 0.0,
                       bottom: 12.0,
                     ),
                     child: Row(
@@ -110,6 +115,7 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
         );
         break;
       default:
+        // Применяем Shift для букв
         final text = isShiftEnabled && !isDigitKey ? key.toUpperCase() : key.toLowerCase();
         keyChild = Text(text, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w400));
     }

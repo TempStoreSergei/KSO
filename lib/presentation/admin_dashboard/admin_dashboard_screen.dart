@@ -3,6 +3,8 @@ import 'package:motel/presentation/screensaver_settings/screensaver_settings_scr
 import 'package:motel/presentation/settings/change_password_screen.dart';
 import 'package:motel/presentation/settings/desktop_background_settings_screen.dart';
 import 'package:motel/presentation/settings/services_settings_screen.dart';
+import 'package:motel/presentation/settings/fines_settings_screen.dart';
+import 'package:motel/presentation/settings/transactions_screen.dart';
 import 'package:motel/presentation/settings/shift_settings_screen.dart';
 import 'package:motel/presentation/settings/bill_acceptor_settings_screen.dart';
 import 'package:motel/presentation/settings/bill_dispenser_settings_screen.dart';
@@ -154,6 +156,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ShiftSettingsScreen())),
                       icon: CupertinoIcons.clock_fill,
                       iconColor: CupertinoColors.systemIndigo,
+                    ),
+                  ],
+                ),
+              ),
+
+              // БЛОК 3: УСЛУГИ И ШТРАФЫ
+              SliverToBoxAdapter(
+                child: CupertinoListSection.insetGrouped(
+                  header: const Text('УСЛУГИ И ШТРАФЫ'),
+                  children: [
+                    _buildNavigationTile(
+                      label: 'Услуги',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ServicesSettingsScreen())),
+                      icon: CupertinoIcons.square_list,
+                      iconColor: CupertinoColors.systemBlue,
+                    ),
+                    _buildNavigationTile(
+                      label: 'Штрафы',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const FinesSettingsScreen())),
+                      icon: CupertinoIcons.exclamationmark_triangle_fill,
+                      iconColor: CupertinoColors.systemRed,
+                    ),
+                    _buildNavigationTile(
+                      label: 'Транзакции',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const TransactionsScreen())),
+                      icon: CupertinoIcons.doc_text_fill,
+                      iconColor: CupertinoColors.systemGreen,
                     ),
                   ],
                 ),

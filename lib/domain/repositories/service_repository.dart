@@ -10,7 +10,9 @@ abstract class ServiceRepository {
   Future<bool> createService({
     required String name,
     int? price,
-    required bool isOneTime,
+    required int tax,
+    required bool isCountable,
+    required bool isDuration,
   });
 
   /// Обновляет существующую услугу.
@@ -19,7 +21,9 @@ abstract class ServiceRepository {
     required String serviceID,
     required String name,
     int? price,
-    required bool isOneTime,
+    required int tax,
+    required bool isCountable,
+    required bool isDuration,
   });
 
   /// Удаляет услугу по ее ID.

@@ -33,6 +33,8 @@ class BookingSidebar extends StatelessWidget {
         return 'Способ оплаты';
       case BookingStep.confirmation:
         return 'Подтверждение';
+      case BookingStep.paymentExecution:
+        return 'Оплата';
       case BookingStep.success:
         return 'Завершено';
     }
@@ -56,6 +58,8 @@ class BookingSidebar extends StatelessWidget {
         return CupertinoIcons.creditcard_fill;
       case BookingStep.confirmation:
         return CupertinoIcons.checkmark_circle_fill;
+      case BookingStep.paymentExecution:
+        return CupertinoIcons.money_dollar_circle_fill;
       case BookingStep.success:
         return CupertinoIcons.checkmark_seal_fill;
     }
@@ -63,7 +67,7 @@ class BookingSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displaySteps = steps.where((s) => s != BookingStep.success).toList();
+    final displaySteps = steps.where((s) => s != BookingStep.success && s != BookingStep.paymentExecution).toList();
 
     return Container(
       width: 280,
@@ -99,7 +103,7 @@ class BookingSidebar extends StatelessWidget {
                     height: 40,
                     decoration: BoxDecoration(
                       color: isActive
-                          ? CupertinoColors.activeBlue
+                          ? CupertinoColors.activeOrange
                           : isCompleted
                           ? CupertinoColors.activeGreen
                           : const Color(0xFF2C2C2E),

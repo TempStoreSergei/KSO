@@ -3,7 +3,14 @@
 // ============================================
 
 import 'package:flutter/cupertino.dart';
+import 'package:motel/core/api/api_client.dart';
+import 'package:motel/data/datasources/service_remote_data_source.dart';
+import 'package:motel/data/repositories/service_repository_impl.dart';
+import 'package:motel/domain/entities/service_entity.dart';
 import 'package:motel/domain/models/booking_models.dart';
+import 'package:motel/domain/models/fine_models.dart';
+import 'package:motel/domain/usecases/get_fines.dart';
+import 'package:motel/domain/usecases/get_services_usecase.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 import 'package:motel/presentation/guest_info/keyboard_notifier.dart';
 import 'package:provider/provider.dart';
@@ -28,6 +35,8 @@ class _StepItemSelectionState extends State<StepItemSelection> {
   late TextEditingController _searchController;
   late FocusNode _searchFocusNode;
   String _searchQuery = '';
+  List<BookingItem> _items = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -51,6 +60,79 @@ class _StepItemSelectionState extends State<StepItemSelection> {
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
+
+    // Загружаем данные из API
+    _loadItems();
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final items = await _fetchItemsFromAPI();
+      if (mounted) {
+        setState(() {
+          _items = items;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<List<BookingItem>> _fetchItemsFromAPI() async {
+    final apiClient = ApiClient.instance;
+
+    switch (widget.category) {
+      case BookingCategory.services:
+      case BookingCategory.accommodation:
+        // Загружаем услуги из API
+        final repository = ServiceRepositoryImpl(
+          remoteDataSource: ServiceRemoteDataSourceImpl(apiClient: apiClient),
+        );
+        final getServicesUseCase = GetServicesUseCase(repository);
+        final services = await getServicesUseCase.call();
+        return services.map((service) => _serviceToBookingItem(service)).toList();
+
+      case BookingCategory.ruleViolationPenalty:
+        // Загружаем штрафы за нарушение правил
+        final getFinesUseCase = GetFinesUseCase(apiClient);
+        final fines = await getFinesUseCase.getByType(FineType.violationRules);
+        return fines.map((fine) => _fineToBookingItem(fine)).toList();
+
+      case BookingCategory.propertyDamagePenalty:
+        // Загружаем штрафы за порчу имущества
+        final getFinesUseCase = GetFinesUseCase(apiClient);
+        final fines = await getFinesUseCase.getByType(FineType.damageToProperty);
+        return fines.map((fine) => _fineToBookingItem(fine)).toList();
+
+      case BookingCategory.unknown:
+        return [];
+    }
+  }
+
+  BookingItem _serviceToBookingItem(ServiceEntity service) {
+    return BookingItem(
+      id: service.id.toString(),
+      name: service.name,
+      price: service.price,
+      category: widget.category,
+      isCountable: service.isCountable,
+      isDuration: service.isDuration,
+    );
+  }
+
+  BookingItem _fineToBookingItem(Fine fine) {
+    return BookingItem(
+      id: fine.id.toString(),
+      name: fine.name,
+      price: fine.price,
+      category: widget.category,
+      isCountable: false,
+      isDuration: false,
+    );
   }
 
   @override
@@ -81,146 +163,11 @@ class _StepItemSelectionState extends State<StepItemSelection> {
     }
   }
 
-  // Моковые данные для разных категорий
-  List<BookingItem> _getMockItems() {
-    switch (widget.category) {
-      case BookingCategory.accommodation:
-        return [
-          BookingItem(
-            id: 'breakfast',
-            name: 'Завтрак',
-            price: 500,
-            category: BookingCategory.accommodation,
-          ),
-          BookingItem(
-            id: 'parking',
-            name: 'Парковка',
-            price: 300,
-            category: BookingCategory.accommodation,
-          ),
-          BookingItem(
-            id: 'spa',
-            name: 'СПА-услуги',
-            price: 1200,
-            category: BookingCategory.accommodation,
-          ),
-          BookingItem(
-            id: 'gym',
-            name: 'Тренажёрный зал',
-            price: 400,
-            category: BookingCategory.accommodation,
-          ),
-        ];
-      case BookingCategory.services:
-        return [
-          BookingItem(
-            id: 'laundry',
-            name: 'Прачечная',
-            price: 800,
-            category: BookingCategory.services,
-          ),
-          BookingItem(
-            id: 'room_service',
-            name: 'Обслуживание в номере',
-            price: 600,
-            category: BookingCategory.services,
-          ),
-          BookingItem(
-            id: 'transfer',
-            name: 'Трансфер',
-            price: 1500,
-            category: BookingCategory.services,
-          ),
-          BookingItem(
-            id: 'excursion',
-            name: 'Экскурсия',
-            price: 2000,
-            category: BookingCategory.services,
-          ),
-          BookingItem(
-            id: 'massage',
-            name: 'Массаж',
-            price: 1800,
-            category: BookingCategory.services,
-          ),
-          BookingItem(
-            id: 'sauna',
-            name: 'Сауна',
-            price: 1000,
-            category: BookingCategory.services,
-          ),
-        ];
-      case BookingCategory.ruleViolationPenalty:
-        return [
-          BookingItem(
-            id: 'smoking',
-            name: 'Курение в номере',
-            price: 5000,
-            category: BookingCategory.ruleViolationPenalty,
-          ),
-          BookingItem(
-            id: 'noise',
-            name: 'Нарушение тишины',
-            price: 2000,
-            category: BookingCategory.ruleViolationPenalty,
-          ),
-          BookingItem(
-            id: 'pets',
-            name: 'Содержание животных без разрешения',
-            price: 3000,
-            category: BookingCategory.ruleViolationPenalty,
-          ),
-          BookingItem(
-            id: 'unauthorized_guests',
-            name: 'Неразрешённые гости',
-            price: 2500,
-            category: BookingCategory.ruleViolationPenalty,
-          ),
-        ];
-      case BookingCategory.propertyDamagePenalty:
-        return [
-          BookingItem(
-            id: 'furniture_damage',
-            name: 'Повреждение мебели',
-            price: 10000,
-            category: BookingCategory.propertyDamagePenalty,
-          ),
-          BookingItem(
-            id: 'appliance_damage',
-            name: 'Повреждение техники',
-            price: 15000,
-            category: BookingCategory.propertyDamagePenalty,
-          ),
-          BookingItem(
-            id: 'linen_damage',
-            name: 'Порча белья',
-            price: 3000,
-            category: BookingCategory.propertyDamagePenalty,
-          ),
-          BookingItem(
-            id: 'wall_damage',
-            name: 'Повреждение стен/пола',
-            price: 8000,
-            category: BookingCategory.propertyDamagePenalty,
-          ),
-          BookingItem(
-            id: 'window_damage',
-            name: 'Повреждение окон',
-            price: 12000,
-            category: BookingCategory.propertyDamagePenalty,
-          ),
-        ];
-      case BookingCategory.unknown:
-        return [];
-    }
-  }
-
   List<BookingItem> get _filteredItems {
-    final items = _getMockItems();
     if (_searchQuery.isEmpty) {
-      return items;
+      return _items;
     }
-    return items.where((item) => item.name.toLowerCase().contains(_searchQuery)).toList();
+    return _items.where((item) => item.name.toLowerCase().contains(_searchQuery)).toList();
   }
 
   void _toggleItem(BookingItem item) {
@@ -234,6 +181,16 @@ class _StepItemSelectionState extends State<StepItemSelection> {
     }
 
     widget.onItemsChanged(updatedItems);
+  }
+
+  void _updateItemQuantity(BookingItem item, int newQuantity) {
+    final updatedItems = List<BookingItem>.from(widget.selectedItems);
+    final index = updatedItems.indexWhere((i) => i.id == item.id);
+
+    if (index >= 0) {
+      updatedItems[index].quantity = newQuantity.clamp(1, 99);
+      widget.onItemsChanged(updatedItems);
+    }
   }
 
   bool _isSelected(BookingItem item) {
@@ -261,7 +218,14 @@ class _StepItemSelectionState extends State<StepItemSelection> {
           if (_shouldShowSearch()) _buildSearchField(),
           SizedBox(
             height: _shouldShowSearch() ? 280 : 320,
-            child: _buildItemsList(),
+            child: _isLoading
+                ? const Center(
+                    child: CupertinoActivityIndicator(
+                      color: CupertinoColors.white,
+                      radius: 15,
+                    ),
+                  )
+                : _buildItemsList(),
           ),
         ],
       ),
@@ -402,6 +366,11 @@ class _StepItemSelectionState extends State<StepItemSelection> {
           backgroundColor: const Color(0xFF000000),
           children: items.map((item) {
             final isSelected = _isSelected(item);
+            final selectedItem = widget.selectedItems.firstWhere(
+              (i) => i.id == item.id,
+              orElse: () => item,
+            );
+
             return CupertinoListTile(
               title: Text(
                 item.name,
@@ -410,13 +379,7 @@ class _StepItemSelectionState extends State<StepItemSelection> {
                   fontSize: 16,
                 ),
               ),
-              subtitle: Text(
-                '${item.price} ₽',
-                style: const TextStyle(
-                  color: CupertinoColors.systemGrey,
-                  fontSize: 14,
-                ),
-              ),
+              subtitle: _buildSubtitle(item, selectedItem),
               leading: Container(
                 width: 34,
                 height: 34,
@@ -430,20 +393,115 @@ class _StepItemSelectionState extends State<StepItemSelection> {
                   size: 20,
                 ),
               ),
-              trailing: Icon(
-                isSelected
-                    ? CupertinoIcons.checkmark_circle_fill
-                    : CupertinoIcons.circle,
-                color: isSelected
-                    ? CupertinoColors.activeBlue
-                    : CupertinoColors.systemGrey,
-                size: 24,
-              ),
+              trailing: _buildTrailing(item, selectedItem, isSelected),
               onTap: () => _toggleItem(item),
             );
           }).toList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildSubtitle(BookingItem item, BookingItem selectedItem) {
+    String priceText = '${item.price} ₽';
+
+    if (_isSelected(item)) {
+      if (item.isCountable) {
+        priceText += ' × ${selectedItem.quantity} = ${selectedItem.totalPrice} ₽';
+      } else if (item.isDuration) {
+        priceText += ' × ${selectedItem.quantity} ${_getDaysText(selectedItem.quantity)} = ${selectedItem.totalPrice} ₽';
+      }
+    } else {
+      if (item.isCountable) {
+        priceText += ' (можно выбрать количество)';
+      } else if (item.isDuration) {
+        priceText += ' (можно выбрать дни)';
+      }
+    }
+
+    return Text(
+      priceText,
+      style: const TextStyle(
+        color: CupertinoColors.systemGrey,
+        fontSize: 14,
+      ),
+    );
+  }
+
+  String _getDaysText(int days) {
+    if (days % 10 == 1 && days % 100 != 11) {
+      return 'день';
+    } else if ([2, 3, 4].contains(days % 10) && ![12, 13, 14].contains(days % 100)) {
+      return 'дня';
+    } else {
+      return 'дней';
+    }
+  }
+
+  Widget _buildTrailing(BookingItem item, BookingItem selectedItem, bool isSelected) {
+    if (isSelected && (item.isCountable || item.isDuration)) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minSize: 30,
+            onPressed: () => _updateItemQuantity(selectedItem, selectedItem.quantity - 1),
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C2C2E),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(
+                CupertinoIcons.minus,
+                color: CupertinoColors.white,
+                size: 18,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              '${selectedItem.quantity}',
+              style: const TextStyle(
+                color: CupertinoColors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minSize: 30,
+            onPressed: () => _updateItemQuantity(selectedItem, selectedItem.quantity + 1),
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: CupertinoColors.activeBlue,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(
+                CupertinoIcons.plus,
+                color: CupertinoColors.white,
+                size: 18,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Icon(
+      isSelected
+          ? CupertinoIcons.checkmark_circle_fill
+          : CupertinoIcons.circle,
+      color: isSelected
+          ? CupertinoColors.activeBlue
+          : CupertinoColors.systemGrey,
+      size: 24,
     );
   }
 }

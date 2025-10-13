@@ -112,11 +112,9 @@ class _ServicesSettingsScreenState extends State<ServicesSettingsScreen> {
         header: const Text('СУЩЕСТВУЮЩИЕ УСЛУГИ'),
         children: _services!.map((service) {
           return CupertinoListTile(
-            title: Text(service.serviceName),
+            title: Text(service.name),
             subtitle: Text(
-              service.servicePrice != null
-                  ? '${service.servicePrice} ₽ ${service.serviceOneTime ? "(разовая)" : ""}'
-                  : 'Цена не указана',
+              '${service.price} ₽ | Налог: ${service.tax}%',
               style: const TextStyle(color: CupertinoColors.systemGrey),
             ),
             trailing: const CupertinoListTileChevron(),

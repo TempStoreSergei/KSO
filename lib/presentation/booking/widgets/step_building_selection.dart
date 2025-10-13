@@ -3,6 +3,7 @@
 // ============================================
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:motel/domain/models/booking_models.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 
@@ -21,60 +22,141 @@ class StepBuildingSelection extends StatelessWidget {
         Building(id: '1', name: 'Корпус А'),
         Building(id: '2', name: 'Корпус Б'),
         Building(id: '3', name: 'Корпус В'),
-        Building(id: '4', name: 'Корпус Г'),
       ];
+
+  IconData _getBuildingIcon(String buildingId) {
+    switch (buildingId) {
+      case '1':
+        return CupertinoIcons.building_2_fill;
+      case '2':
+        return CupertinoIcons.house_alt_fill;
+      case '3':
+        return CupertinoIcons.layers_alt_fill;
+      default:
+        return CupertinoIcons.building_2_fill;
+    }
+  }
+
+  Color _getBuildingColor(String buildingId) {
+    switch (buildingId) {
+      case '1':
+        return CupertinoColors.systemBlue;
+      case '2':
+        return CupertinoColors.systemGreen;
+      case '3':
+        return CupertinoColors.systemPurple;
+      default:
+        return CupertinoColors.systemGrey;
+    }
+  }
+
+  String _getBuildingDescription(String buildingId) {
+    switch (buildingId) {
+      case '1':
+        return 'Основной корпус';
+      case '2':
+        return 'Семейный корпус';
+      case '3':
+        return 'Премиум корпус';
+      default:
+        return '';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return StepContainer(
+      icon: CupertinoIcons.building_2_fill,
       title: 'Выберите корпус',
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 2.5,
-          ),
-          itemCount: _mockBuildings.length,
-          itemBuilder: (context, index) {
-            final building = _mockBuildings[index];
-            final isSelected = selectedBuilding?.id == building.id;
+      subtitle: 'Всего ${_mockBuildings.length} корпуса',
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            // Первый корпус
+            _buildBuildingRow(_mockBuildings[0]),
 
-            return CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => onBuildingSelected(building),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? CupertinoColors.activeBlue
-                      : const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected
-                        ? CupertinoColors.activeBlue
-                        : const Color(0xFF3A3A3C),
-                    width: 2,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
+            // Разделитель
+            const Padding(
+              padding: EdgeInsets.only(left: 16.0),
+              child: Divider(height: 1, color: Color(0xFF2C2C2E)),
+            ),
+
+            // Второй корпус
+            _buildBuildingRow(_mockBuildings[1]),
+
+            // Разделитель
+            const Padding(
+              padding: EdgeInsets.only(left: 16.0),
+              child: Divider(height: 1, color: Color(0xFF2C2C2E)),
+            ),
+
+            // Третий корпус
+            _buildBuildingRow(_mockBuildings[2]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBuildingRow(Building building) {
+    final isSelected = selectedBuilding?.id == building.id;
+    final buildingColor = _getBuildingColor(building.id);
+
+    return GestureDetector(
+      onTap: () => onBuildingSelected(building),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isSelected ? buildingColor.withValues(alpha: 0.2) : const Color(0xFF2C2C2E),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _getBuildingIcon(building.id),
+                color: isSelected ? buildingColor : CupertinoColors.systemGrey,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                     building.name,
                     style: TextStyle(
-                      color: isSelected
-                          ? CupertinoColors.white
-                          : CupertinoColors.systemGrey,
-                      fontSize: 18,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? CupertinoColors.white : CupertinoColors.systemGrey,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _getBuildingDescription(building.id),
+                    style: const TextStyle(
+                      color: CupertinoColors.systemGrey2,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
-            );
-          },
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 24,
+              child: isSelected
+                  ? Icon(CupertinoIcons.checkmark_circle_fill, color: buildingColor, size: 24)
+                  : const Icon(CupertinoIcons.circle, color: CupertinoColors.systemGrey3, size: 24),
+            ),
+          ],
         ),
       ),
     );

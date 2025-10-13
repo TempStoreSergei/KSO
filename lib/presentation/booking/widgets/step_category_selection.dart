@@ -3,6 +3,7 @@
 // ============================================
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:motel/domain/models/booking_models.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 
@@ -63,96 +64,124 @@ class StepCategorySelection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categories = [
-      BookingCategory.accommodation,
-      BookingCategory.services,
-      BookingCategory.ruleViolationPenalty,
-      BookingCategory.propertyDamagePenalty,
-    ];
-
     return StepContainer(
       title: 'Выберите категорию',
-      child: SizedBox(
-        height: 360,
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          itemCount: categories.length,
-          itemBuilder: (context, index) {
-            final category = categories[index];
-            final isSelected = selectedCategory == category;
+      subtitle: 'Выберите тип бронирования',
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            // Первая категория - Проживание
+            _buildCategoryRow(
+              category: BookingCategory.accommodation,
+              isSelected: selectedCategory == BookingCategory.accommodation,
+              onTap: () => onCategorySelected(BookingCategory.accommodation),
+            ),
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: () => onCategorySelected(category),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? CupertinoColors.activeBlue
-                        : const Color(0xFF1C1C1E),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? CupertinoColors.white.withOpacity(0.2)
-                              : const Color(0xFF2C2C2E),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          _getCategoryIcon(category),
-                          size: 24,
-                          color: isSelected
-                              ? CupertinoColors.white
-                              : CupertinoColors.systemGrey,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _getCategoryName(category),
-                              style: TextStyle(
-                                color: isSelected
-                                    ? CupertinoColors.white
-                                    : CupertinoColors.white,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _getCategoryDescription(category),
-                              style: TextStyle(
-                                color: isSelected
-                                    ? CupertinoColors.white.withOpacity(0.8)
-                                    : CupertinoColors.systemGrey,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (isSelected)
-                        const Icon(
-                          CupertinoIcons.checkmark_circle_fill,
-                          color: CupertinoColors.white,
-                          size: 24,
-                        ),
-                    ],
-                  ),
-                ),
+            // Разделитель
+            const Padding(
+              padding: EdgeInsets.only(left: 16.0),
+              child: Divider(height: 1, color: Color(0xFF2C2C2E)),
+            ),
+
+            // Вторая категория - Услуги
+            _buildCategoryRow(
+              category: BookingCategory.services,
+              isSelected: selectedCategory == BookingCategory.services,
+              onTap: () => onCategorySelected(BookingCategory.services),
+            ),
+
+            // Разделитель
+            const Padding(
+              padding: EdgeInsets.only(left: 16.0),
+              child: Divider(height: 1, color: Color(0xFF2C2C2E)),
+            ),
+
+            // Третья категория - Штраф за нарушение правил
+            _buildCategoryRow(
+              category: BookingCategory.ruleViolationPenalty,
+              isSelected: selectedCategory == BookingCategory.ruleViolationPenalty,
+              onTap: () => onCategorySelected(BookingCategory.ruleViolationPenalty),
+            ),
+
+            // Разделитель
+            const Padding(
+              padding: EdgeInsets.only(left: 16.0),
+              child: Divider(height: 1, color: Color(0xFF2C2C2E)),
+            ),
+
+            // Четвертая категория - Штраф за порчу имущества
+            _buildCategoryRow(
+              category: BookingCategory.propertyDamagePenalty,
+              isSelected: selectedCategory == BookingCategory.propertyDamagePenalty,
+              onTap: () => onCategorySelected(BookingCategory.propertyDamagePenalty),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Вспомогательный виджет для отрисовки одной строки категории
+  Widget _buildCategoryRow({
+    required BookingCategory category,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isSelected ? CupertinoColors.activeBlue.withValues(alpha: 0.2) : const Color(0xFF2C2C2E),
+                borderRadius: BorderRadius.circular(10),
               ),
-            );
-          },
+              child: Icon(
+                _getCategoryIcon(category),
+                color: isSelected ? CupertinoColors.activeBlue : CupertinoColors.systemGrey,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _getCategoryName(category),
+                    style: TextStyle(
+                      color: isSelected ? CupertinoColors.white : CupertinoColors.systemGrey,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _getCategoryDescription(category),
+                    style: const TextStyle(
+                      color: CupertinoColors.systemGrey2,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 24,
+              child: isSelected
+                  ? const Icon(CupertinoIcons.checkmark_circle_fill, color: CupertinoColors.activeBlue, size: 24)
+                  : const Icon(CupertinoIcons.circle, color: CupertinoColors.systemGrey3, size: 24),
+            ),
+          ],
         ),
       ),
     );

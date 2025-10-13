@@ -29,7 +29,7 @@
 
     @override
     Widget build(BuildContext context) {
-      final iconData = _serviceIcons[service.serviceName] ?? _defaultIcon;
+      final iconData = _serviceIcons[service.name] ?? _defaultIcon;
 
       return GestureDetector(
         onTap: onTap,
@@ -53,7 +53,7 @@
 
               // 3. Текст в левом нижнем углу.
               Text(
-                service.serviceName,
+                service.name,
                 // Устанавливаем максимальное количество строк.
                 maxLines: 3,
                 // Если текст не помещается, он обрезается с многоточием.

@@ -29,16 +29,21 @@ class _StepConfirmationState extends State<StepConfirmation> {
   bool _isLoading = false;
 
   Future<void> _submit() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final useCase = SaveTransactionUseCase(ApiClient.instance);
       await useCase.call(widget.data);
       widget.onSuccess();
     } catch (e) {
-      widget.onError(e.toString());
+      widget.onError('Ошибка при отправке данных: $e');
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -48,7 +53,7 @@ class _StepConfirmationState extends State<StepConfirmation> {
     return StepContainer(
       icon: CupertinoIcons.check_mark_circled_solid,
       title: 'Подтверждение',
-      subtitle: 'Пожалуйста, проверьте все данные',
+      subtitle: 'Пожалуйста, проверьте все данные. Если Вы видите ошибку, нажмите кнопку «Назад»',
       child: Column(
         children: [
           Container(
@@ -81,9 +86,22 @@ class _StepConfirmationState extends State<StepConfirmation> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  ...widget.data.selectedItems.map((item) =>
-                    _buildInfoRow('  ${item.name}', '${item.price} ₽')
-                  ),
+                  ...widget.data.selectedItems.map((item) {
+                    String itemText = '  ${item.name}';
+                    String priceText;
+
+                    if (item.isCountable) {
+                      itemText += ' (×${item.quantity})';
+                      priceText = '${item.price} × ${item.quantity} = ${item.totalPrice} ₽';
+                    } else if (item.isDuration) {
+                      itemText += ' (${item.quantity} ${_getDaysText(item.quantity)})';
+                      priceText = '${item.price} × ${item.quantity} = ${item.totalPrice} ₽';
+                    } else {
+                      priceText = '${item.totalPrice} ₽';
+                    }
+
+                    return _buildInfoRow(itemText, priceText);
+                  }),
                 ],
                 const SizedBox(height: 12),
                 _buildInfoRow('Оплата:', widget.data.paymentMethod ?? 'Не выбран'),
@@ -106,9 +124,9 @@ class _StepConfirmationState extends State<StepConfirmation> {
                 child: _isLoading
                     ? const CupertinoActivityIndicator(color: CupertinoColors.white)
                     : const Text(
-                  'Подтвердить и оплатить',
-                  style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.bold, fontSize: 17),
-                ),
+                        'Подтвердить и оплатить',
+                        style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                      ),
               ),
             ),
           ),
@@ -129,6 +147,16 @@ class _StepConfirmationState extends State<StepConfirmation> {
         return 'Штраф за порчу имущества';
       case BookingCategory.unknown:
         return 'Не выбрано';
+    }
+  }
+
+  String _getDaysText(int days) {
+    if (days % 10 == 1 && days % 100 != 11) {
+      return 'день';
+    } else if ([2, 3, 4].contains(days % 10) && ![12, 13, 14].contains(days % 100)) {
+      return 'дня';
+    } else {
+      return 'дней';
     }
   }
 

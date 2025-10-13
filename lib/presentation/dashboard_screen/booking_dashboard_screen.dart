@@ -62,7 +62,7 @@ class _BookingDashboardViewState extends State<BookingDashboardView> {
   }
 
   void _select(ServiceEntity s) {
-    widget.bookingData.selectedService = s.serviceName;
+    widget.bookingData.selectedService = s.name;
     Navigator.of(context).push(CupertinoPageRoute(
       builder: (_) => PaymentScreen(bookingData: widget.bookingData),
     ));

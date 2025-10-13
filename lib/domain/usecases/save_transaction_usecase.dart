@@ -36,10 +36,12 @@ class SaveTransactionUseCase {
   // Вспомогательный метод для маппинга данных
   SaveTransactionRequest _mapBookingDataToRequest(BookingData data) {
     // Собираем массив ID сервисов из выбранных элементов
-    final List<int> serviceIds = data.selectedItems
-        .map((item) => int.tryParse(item.id) ?? 0)
-        .where((id) => id != 0)
-        .toList();
+    final List<int>? serviceIds = data.selectedItems.isNotEmpty
+        ? data.selectedItems
+            .map((item) => int.tryParse(item.id) ?? 0)
+            .where((id) => id != 0)
+            .toList()
+        : null;
 
     return SaveTransactionRequest(
       guest: GuestInfoRequest(
@@ -47,10 +49,9 @@ class SaveTransactionUseCase {
         lastName: data.lastName ?? '',
         surname: data.middleName ?? '', // Маппим middleName в surname
       ),
+      room: data.selectedRoom?.name ?? '0', // Номер комнаты как строка
       services: serviceIds,
-      // Пытаемся распарсить номер комнаты из строки, если не получается - ставим 0
-      roomId: int.tryParse(data.selectedRoom?.name ?? '0') ?? 0,
-      // Конвертируем даты в стандартный формат ISO 8601
+      // Конвертируем даты в стандартный формат ISO 8601 (опционально)
       checkIn: data.checkInDate.toIso8601String(),
       checkOut: data.checkOutDate.toIso8601String(),
       paymentType: data.paymentMethod ?? 'unknown',

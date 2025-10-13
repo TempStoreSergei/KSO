@@ -12,6 +12,7 @@ enum BookingStep {
   itemSelection,
   payment,
   confirmation,
+  paymentExecution, // Выполнение платежа с таймером
   success,
 }
 
@@ -24,13 +25,28 @@ enum BookingCategory {
   propertyDamagePenalty, // Штраф за порчу имущества
 }
 
-// Типы комнат
+// Типы комнат (по количеству мест)
 enum RoomType {
   all,
-  standard,
-  comfort,
-  lux,
-  suite,
+  fourBed,   // 4 места
+  sixBed,    // 6 мест
+  eightBed,  // 8 мест
+}
+
+// Расширение для преобразования RoomType в строку для API
+extension RoomTypeExtension on RoomType {
+  String toApiString() {
+    switch (this) {
+      case RoomType.fourBed:
+        return 'fourBed';
+      case RoomType.sixBed:
+        return 'sixBed';
+      case RoomType.eightBed:
+        return 'eightBed';
+      case RoomType.all:
+        return 'all';
+    }
+  }
 }
 
 // Модель корпуса
@@ -65,13 +81,22 @@ class BookingItem {
   final String name;
   final int price;
   final BookingCategory category;
+  final bool isCountable; // Можно задать количество
+  final bool isDuration; // Услуга на определенное количество дней
+  int quantity; // Количество (для isCountable) или дни (для isDuration)
 
   BookingItem({
     required this.id,
     required this.name,
     required this.price,
     required this.category,
+    this.isCountable = false,
+    this.isDuration = false,
+    this.quantity = 1,
   });
+
+  // Итоговая стоимость с учетом количества/дней
+  int get totalPrice => price * quantity;
 }
 
 // Основной класс, хранящий все данные о текущем бронировании
@@ -86,6 +111,7 @@ class BookingData {
   String? firstName;
   String? middleName;
   String? paymentMethod;
+  int? calculatedRoomPrice; // Цена проживания, полученная с сервера
 
   int get totalNights {
     if (checkOutDate.isBefore(checkInDate)) return 0;
@@ -95,15 +121,15 @@ class BookingData {
 
   int get totalPrice {
     if (selectedCategory == BookingCategory.accommodation && selectedRoom != null) {
-      const int pricePerNight = 3000;
-      int basePrice = pricePerNight * totalNights;
+      // Используем рассчитанную цену с сервера, если есть, иначе используем стандартную цену
+      int basePrice = calculatedRoomPrice ?? (3000 * totalNights);
 
-      // Добавляем цену выбранных услуг
-      int itemsPrice = selectedItems.fold(0, (sum, item) => sum + item.price);
+      // Добавляем цену выбранных услуг с учетом количества
+      int itemsPrice = selectedItems.fold(0, (sum, item) => sum + item.totalPrice);
       return basePrice + itemsPrice;
     }
 
-    // Для остальных категорий просто суммируем цены выбранных элементов
-    return selectedItems.fold(0, (sum, item) => sum + item.price);
+    // Для остальных категорий суммируем цены выбранных элементов с учетом количества
+    return selectedItems.fold(0, (sum, item) => sum + item.totalPrice);
   }
 }
