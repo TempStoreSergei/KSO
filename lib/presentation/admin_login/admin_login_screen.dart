@@ -5,7 +5,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:motel/data/repositories/admin_auth_repository_impl.dart';
 import 'package:motel/domain/usecases/login_admin.dart';
-import 'package:motel/presentation/admin_dashboard/admin_dashboard_screen.dart';
+import 'package:motel/presentation/settings/settings_screen.dart';
 import 'package:motel/presentation/guest_info/custom_keyboard.dart';
 import 'package:motel/presentation/guest_info/keyboard_notifier.dart';
 import 'package:provider/provider.dart';
@@ -122,7 +122,7 @@ class _AdminLoginViewState extends State<_AdminLoginView> {
 
     if (success) {
       Navigator.of(context).pushReplacement(
-        CupertinoPageRoute(builder: (_) => const SettingsScreen()),
+        CupertinoPageRoute(builder: (_) => AdminDashboardScreen()),
       );
     } else {
       setState(() {

@@ -171,6 +171,24 @@ class ApiClient {
     await _cookieJar.deleteAll();
   }
 
+  // Метод для получения метрик
+  Future<Map<String, dynamic>> getMetrics() async {
+    final response = await get('/metrics');
+    return response as Map<String, dynamic>;
+  }
+
+  // Метод для запуска телеграм бота
+  Future<Map<String, dynamic>> startTelegramBot(String token, String chatId) async {
+    final response = await post('/notifications/tg/start', body: {'token': token, 'chat': chatId});
+    return response as Map<String, dynamic>;
+  }
+
+  // Метод для остановки телеграм бота
+  Future<Map<String, dynamic>> stopTelegramBot() async {
+    final response = await post('/notifications/tg/stop');
+    return response as Map<String, dynamic>;
+  }
+
   dynamic _processResponse(http.Response response) {
     switch (response.statusCode) {
       case 200:
