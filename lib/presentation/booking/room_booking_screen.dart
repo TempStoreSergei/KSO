@@ -1,12 +1,18 @@
 // ============================================
-// lib/presentation/booking/room_booking_screen.dart
+// lib/presentation/booking/room_booking_screen_refactored.dart
 // ============================================
 
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:motel/core/services/metrics_service.dart';
 import 'package:motel/domain/models/booking_models.dart';
 import 'package:motel/domain/usecases/calculate_room_price.dart';
+import 'package:motel/presentation/booking/cubit/booking_cubit.dart';
+import 'package:motel/presentation/booking/cubit/booking_state.dart';
+import 'package:motel/presentation/booking/managers/inactivity_manager.dart';
+import 'package:motel/presentation/booking/managers/keyboard_manager.dart';
+import 'package:motel/presentation/booking/managers/room_input_manager.dart';
 import 'package:motel/presentation/booking/widgets/booking_sidebar.dart';
 import 'package:motel/presentation/booking/widgets/step_building_selection.dart';
 import 'package:motel/presentation/booking/widgets/step_category_selection.dart';
@@ -19,311 +25,169 @@ import 'package:motel/presentation/booking/widgets/step_period.dart';
 import 'package:motel/presentation/booking/widgets/step_room_selection.dart';
 import 'package:motel/presentation/booking/widgets/step_success.dart';
 import 'package:motel/presentation/guest_info/custom_keyboard.dart';
-import 'package:motel/presentation/guest_info/keyboard_notifier.dart';
 import 'package:motel/presentation/guest_info/numpad_keyboard.dart';
 import 'package:provider/provider.dart';
 
-
-class RoomBookingScreen extends StatefulWidget {
+class RoomBookingScreen extends StatelessWidget {
   const RoomBookingScreen({super.key});
 
   @override
-  State<RoomBookingScreen> createState() => _RoomBookingScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => BookingCubit(),
+      child: const _RoomBookingView(),
+    );
+  }
 }
 
-class _RoomBookingScreenState extends State<RoomBookingScreen> {
-  final BookingData _bookingData = BookingData();
-  int _currentStepIndex = 0;
-  bool _isBookingSuccessful = false;
+class _RoomBookingView extends StatefulWidget {
+  const _RoomBookingView();
 
-  // Контроллеры и фокусы для полей гостя
-  late final TextEditingController _lastNameController;
-  late final TextEditingController _firstNameController;
-  late final TextEditingController _middleNameController;
-  final FocusNode _lastNameFocusNode = FocusNode();
-  final FocusNode _firstNameFocusNode = FocusNode();
-  final FocusNode _middleNameFocusNode = FocusNode();
-  late KeyboardNotifier _keyboardNotifier;
-  int _focusedFieldIndex = 0;
+  @override
+  State<_RoomBookingView> createState() => _RoomBookingViewState();
+}
 
-  // === НОВОЕ: Состояние для введенного номера комнаты ===
-  String _roomNumberInput = '';
-  RoomType? _selectedRoomType;
+class _RoomBookingViewState extends State<_RoomBookingView> {
+  // Менеджеры
+  late final KeyboardManager _keyboardManager;
+  late final RoomInputManager _roomInputManager;
+  late final InactivityManager _inactivityManager;
+  late final MetricsService _metricsService;
+  late final CalculateRoomPriceUseCase _calculateRoomPriceUseCase;
 
-  // Глобальный таймер бездействия (60 секунд)
-  Timer? _inactivityTimer;
-  static const Duration _inactivityDuration = Duration(seconds: 60);
-
-  // Метрики и время платежа
-  final _metricsService = MetricsService();
   DateTime? _paymentDateTime;
-
-  // Use case для расчета цены
-  final _calculateRoomPriceUseCase = CalculateRoomPriceUseCase();
 
   @override
   void initState() {
     super.initState();
-    _lastNameController = TextEditingController();
-    _firstNameController = TextEditingController();
-    _middleNameController = TextEditingController();
-    _keyboardNotifier = KeyboardNotifier();
 
-    // Отслеживаем изменения фокуса
-    _lastNameFocusNode.addListener(() {
-      if (_lastNameFocusNode.hasFocus) {
-        setState(() => _focusedFieldIndex = 0);
-        _keyboardNotifier.setActiveField(0);
-      }
-    });
-    _firstNameFocusNode.addListener(() {
-      if (_firstNameFocusNode.hasFocus) {
-        setState(() => _focusedFieldIndex = 1);
-        _keyboardNotifier.setActiveField(1);
-      }
-    });
-    _middleNameFocusNode.addListener(() {
-      if (_middleNameFocusNode.hasFocus) {
-        setState(() => _focusedFieldIndex = 2);
-        _keyboardNotifier.setActiveField(2);
-      }
-    });
+    // Инициализация менеджеров
+    _keyboardManager = KeyboardManager();
+    _roomInputManager = RoomInputManager();
+    _metricsService = MetricsService();
+    _calculateRoomPriceUseCase = CalculateRoomPriceUseCase();
+
+    _inactivityManager = InactivityManager(
+      onTimeout: () {
+        if (mounted) Navigator.of(context).pop();
+      },
+    );
+
+    // Настройка клавиатуры
+    _keyboardManager.initializeFocusListeners(setState);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _keyboardNotifier.registerFields(
-        controllers: [_lastNameController, _firstNameController, _middleNameController],
-        focusNodes: [_lastNameFocusNode, _firstNameFocusNode, _middleNameFocusNode],
-      );
-      if (_currentStep == BookingStep.guestInfo) {
-        Future.delayed(const Duration(milliseconds: 100), () {
-          _lastNameFocusNode.requestFocus();
-        });
+      _keyboardManager.registerFields();
+      final cubit = context.read<BookingCubit>();
+      if (cubit.state.currentStep == BookingStep.guestInfo) {
+        _keyboardManager.focusFirstField();
       }
     });
 
-    _startInactivityTimer();
+    _inactivityManager.start();
     _metricsService.startPaymentScenario();
-  }
-
-  void _startInactivityTimer() {
-    _inactivityTimer?.cancel();
-    _inactivityTimer = Timer(_inactivityDuration, () {
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    });
-  }
-
-  void _resetInactivityTimer() {
-    _startInactivityTimer();
   }
 
   @override
   void dispose() {
-    _inactivityTimer?.cancel();
-    _lastNameController.dispose();
-    _firstNameController.dispose();
-    _middleNameController.dispose();
-    _lastNameFocusNode.dispose();
-    _firstNameFocusNode.dispose();
-    _middleNameFocusNode.dispose();
-    _keyboardNotifier.dispose();
+    _keyboardManager.dispose();
+    _inactivityManager.dispose();
     super.dispose();
   }
 
-  // === НОВОЕ: Обработчик нажатий для цифровой клавиатуры ===
   void _onNumpadKeyPressed(String key) {
+    final cubit = context.read<BookingCubit>();
     setState(() {
-      if (key == 'BACKSPACE') {
-        if (_roomNumberInput.isNotEmpty) {
-          _roomNumberInput = _roomNumberInput.substring(0, _roomNumberInput.length - 1);
-        }
-      } else if (_roomNumberInput.length < StepRoomSelection.maxRoomNumberLength) {
-        _roomNumberInput += key;
-      }
-
-      // Обновляем данные бронирования
-      if (_roomNumberInput.isNotEmpty) {
-        // Создаем временный объект Room на основе введенного номера
-        _bookingData.selectedRoom = Room(
-          id: _roomNumberInput, // Используем номер как ID
-          name: _roomNumberInput, // И как имя
-          buildingId: _bookingData.selectedBuilding?.id ?? '',
-          type: RoomType.all, // Тип неизвестен, т.к. вводится вручную
-        );
-      } else {
-        _bookingData.selectedRoom = null;
-      }
+      _roomInputManager.handleKeyPress(key);
+      final room = _roomInputManager.createRoom(cubit.state.bookingData.selectedBuilding);
+      cubit.setRoom(room);
     });
   }
 
-
-  List<BookingStep> get steps {
-    final stepList = [
-      BookingStep.buildingSelection,
-      BookingStep.roomSelection,
-      BookingStep.guestInfo,
-      BookingStep.categorySelection,
-    ];
-
-    if (_bookingData.selectedCategory == BookingCategory.accommodation) {
-      stepList.add(BookingStep.period);
-    }
-    else if (_bookingData.selectedCategory == BookingCategory.services ||
-        _bookingData.selectedCategory == BookingCategory.ruleViolationPenalty ||
-        _bookingData.selectedCategory == BookingCategory.propertyDamagePenalty) {
-      stepList.add(BookingStep.itemSelection);
-    }
-
-    stepList.addAll([BookingStep.payment, BookingStep.confirmation, BookingStep.paymentExecution]);
-
-    if (_isBookingSuccessful) {
-      stepList.add(BookingStep.success);
-    }
-    return stepList;
-  }
-
-  BookingStep get _currentStep => steps[_currentStepIndex];
-
-  bool _canProceed() {
-    switch (_currentStep) {
-      case BookingStep.buildingSelection:
-        return _bookingData.selectedBuilding != null;
-      case BookingStep.roomSelection:
-        return _roomNumberInput.isNotEmpty &&
-            _selectedRoomType != null &&
-            _selectedRoomType != RoomType.all;
-      case BookingStep.guestInfo:
-        return (_bookingData.lastName?.isNotEmpty ?? false) &&
-            (_bookingData.firstName?.isNotEmpty ?? false);
-      case BookingStep.categorySelection:
-        return _bookingData.selectedCategory != BookingCategory.unknown;
-      case BookingStep.period:
-        return true;
-      case BookingStep.itemSelection:
-        if (_bookingData.selectedCategory == BookingCategory.accommodation) {
-          return true;
-        }
-        return _bookingData.selectedItems.isNotEmpty;
-      case BookingStep.payment:
-        return _bookingData.paymentMethod != null;
-      case BookingStep.confirmation:
-        return true;
-      case BookingStep.paymentExecution:
-        return false;
-      case BookingStep.success:
-        return false;
-    }
-  }
-
   Future<void> _nextStep() async {
-    if (_currentStepIndex < steps.length - 1) {
-      // Если переходим с шага выбора периода для проживания - рассчитываем цену
-      if (_currentStep == BookingStep.period &&
-          _bookingData.selectedCategory == BookingCategory.accommodation &&
-          _bookingData.selectedRoom != null &&
-          _bookingData.selectedBuilding != null) {
+    final cubit = context.read<BookingCubit>();
+    final state = cubit.state;
 
-        try {
-          // Показываем индикатор загрузки
-          showCupertinoDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => const Center(
-              child: CupertinoActivityIndicator(radius: 20),
-            ),
-          );
+    // Расчет цены проживания при переходе с шага периода
+    if (state.currentStep == BookingStep.period &&
+        state.bookingData.selectedCategory == BookingCategory.accommodation &&
+        state.bookingData.selectedRoom != null &&
+        state.bookingData.selectedBuilding != null) {
+      await _calculateRoomPrice(cubit);
+    }
 
-          final roomType = _selectedRoomType?.toApiString() ?? 'all';
-          final buildingId = int.tryParse(_bookingData.selectedBuilding!.id) ?? 0;
-          final countDays = _bookingData.totalNights;
+    cubit.nextStep();
 
-          final price = await _calculateRoomPriceUseCase(
-            roomType: roomType,
-            roomBuilding: buildingId,
-            countDays: countDays,
-          );
+    if (cubit.state.currentStep == BookingStep.guestInfo) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _keyboardManager.focusFirstField();
+      });
+    }
+  }
 
-          // Сохраняем рассчитанную цену
-          _bookingData.calculatedRoomPrice = price;
+  Future<void> _calculateRoomPrice(BookingCubit cubit) async {
+    try {
+      showCupertinoDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CupertinoActivityIndicator(radius: 20),
+        ),
+      );
 
-          // Закрываем индикатор загрузки
-          if (mounted) Navigator.of(context).pop();
+      final roomType = _roomInputManager.selectedRoomType?.toApiString() ?? 'all';
+      final buildingId = int.tryParse(cubit.state.bookingData.selectedBuilding!.id) ?? 0;
+      final countDays = cubit.state.bookingData.totalNights;
 
-        } catch (e) {
-          // Закрываем индикатор загрузки
-          if (mounted) Navigator.of(context).pop();
+      final price = await _calculateRoomPriceUseCase(
+        roomType: roomType,
+        roomBuilding: buildingId,
+        countDays: countDays,
+      );
 
-          // Показываем ошибку
-          if (mounted) {
-            showCupertinoDialog(
-              context: context,
-              builder: (ctx) => CupertinoAlertDialog(
-                title: const Text('Ошибка'),
-                content: Text('Не удалось рассчитать цену проживания.\n\n$e'),
-                actions: [
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('OK'),
-                  )
-                ],
-              ),
-            );
-          }
-          return; // Не переходим дальше при ошибке
-        }
-      }
+      cubit.setCalculatedRoomPrice(price);
 
-      setState(() => _currentStepIndex++);
-      if (_currentStep == BookingStep.guestInfo) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          _lastNameFocusNode.requestFocus();
-        });
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        _showErrorDialog('Не удалось рассчитать цену проживания.\n\n$e');
       }
     }
   }
 
   void _previousStep() {
-    if (_currentStepIndex > 0) {
-      if (_currentStep == BookingStep.itemSelection) {
-        _bookingData.selectedItems.clear();
-      } else if (_currentStep == BookingStep.categorySelection) {
-        _bookingData.selectedCategory = BookingCategory.unknown;
-        _bookingData.selectedItems.clear();
-      }
-      // === НОВОЕ: Сбрасываем комнату при возврате к ее выбору ===
-      else if (_currentStep == BookingStep.guestInfo) {
-        _bookingData.selectedRoom = null;
-        _roomNumberInput = '';
-        _selectedRoomType = null;
-      }
+    final cubit = context.read<BookingCubit>();
 
-      setState(() => _currentStepIndex--);
+    if (cubit.state.currentStep == BookingStep.guestInfo) {
+      _roomInputManager.reset();
+    }
 
-      if (_currentStep == BookingStep.guestInfo) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          _lastNameFocusNode.requestFocus();
-        });
-      }
+    cubit.previousStep();
+
+    if (cubit.state.currentStep == BookingStep.guestInfo) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _keyboardManager.focusFirstField();
+      });
     }
   }
 
   void _onBookingSuccess() {
     _paymentDateTime = DateTime.now();
     _metricsService.recordSuccessfulPayment();
-    setState(() {
-      _isBookingSuccessful = true;
-      _currentStepIndex++;
-    });
+    context.read<BookingCubit>().markBookingSuccessful();
   }
 
   void _onBookingError(String message) {
+    _showErrorDialog('Не удалось завершить бронирование.\n\n$message');
+  }
+
+  void _showErrorDialog(String message) {
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Ошибка'),
-        content: Text('Не удалось завершить бронирование.\n\n$message'),
+        content: Text(message),
         actions: [
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -337,285 +201,276 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool showBottomBar = _currentStep != BookingStep.confirmation &&
-        _currentStep != BookingStep.paymentExecution &&
-        _currentStep != BookingStep.success;
-    final bool showSidebar = _currentStep != BookingStep.paymentExecution &&
-        _currentStep != BookingStep.success;
+    return BlocBuilder<BookingCubit, BookingState>(
+      builder: (context, state) {
+        final showBottomBar = state.currentStep != BookingStep.confirmation &&
+            state.currentStep != BookingStep.paymentExecution &&
+            state.currentStep != BookingStep.success;
 
-    // === ИЗМЕНЕНО: Логика отображения клавиатуры ===
-    final bool showGuestKeyboard = _currentStep == BookingStep.guestInfo;
-    final bool showNumpad = _currentStep == BookingStep.roomSelection;
-    final bool showKeyboard = showGuestKeyboard || showNumpad;
+        final showSidebar = state.currentStep != BookingStep.paymentExecution &&
+            state.currentStep != BookingStep.success;
 
-    return ChangeNotifierProvider.value(
-      value: _keyboardNotifier,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: _resetInactivityTimer,
-        onPanDown: (_) => _resetInactivityTimer(),
-        child: CupertinoPageScaffold(
-          backgroundColor: const Color(0xFF000000),
-          child: SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 500),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 400),
-                                switchInCurve: Curves.easeInOut,
-                                switchOutCurve: Curves.easeInOut,
-                                transitionBuilder: (child, animation) {
-                                  final offsetAnimation = Tween<Offset>(
-                                    begin: const Offset(0.1, 0.0),
-                                    end: Offset.zero,
-                                  ).animate(CurvedAnimation(
-                                    parent: animation,
-                                    curve: Curves.easeOutCubic,
-                                  ));
-                                  return SlideTransition(
-                                    position: offsetAnimation,
-                                    child: FadeTransition(
-                                      opacity: animation,
-                                      child: child,
+        final showGuestKeyboard = state.currentStep == BookingStep.guestInfo;
+        final showNumpad = state.currentStep == BookingStep.roomSelection;
+        final showKeyboard = showGuestKeyboard || showNumpad;
+
+        return ChangeNotifierProvider.value(
+          value: _keyboardManager.keyboardNotifier,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _inactivityManager.reset,
+            onPanDown: (_) => _inactivityManager.reset(),
+            child: CupertinoPageScaffold(
+              backgroundColor: const Color(0xFF000000),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 500),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 400),
+                                    switchInCurve: Curves.easeInOut,
+                                    switchOutCurve: Curves.easeInOut,
+                                    transitionBuilder: (child, animation) {
+                                      final offsetAnimation = Tween<Offset>(
+                                        begin: const Offset(0.1, 0.0),
+                                        end: Offset.zero,
+                                      ).animate(CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeOutCubic,
+                                      ));
+                                      return SlideTransition(
+                                        position: offsetAnimation,
+                                        child: FadeTransition(
+                                          opacity: animation,
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                    child: _buildCurrentStepWidget(state),
+                                  ),
+                                  if (showBottomBar) ...[
+                                    const SizedBox(height: 40),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                                      child: _buildBottomButton(context),
                                     ),
-                                  );
-                                },
-                                child: _buildCurrentStepWidget(),
+                                  ],
+                                ],
                               ),
-                              if (showBottomBar) ...[
-                                const SizedBox(height: 40),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                                  child: _buildBottomButton(),
+                            ),
+                            if (showSidebar) ...[
+                              const SizedBox(width: 24),
+                              _buildSidebar(state),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (showKeyboard)
+                      Center(
+                        child: SizedBox(
+                          width: showNumpad ? 400 : 1200,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 20.0, left: 20.0, right: 20.0),
+                            child: showNumpad
+                                ? NumpadKeyboard(onKeyPressed: _onNumpadKeyPressed)
+                                : CustomKeyboard(
+                              onKeyPressed: _keyboardManager.keyboardNotifier.onKeyPressed,
+                              showNumbers: !showGuestKeyboard,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSidebar(BookingState state) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 280,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (state.currentStepIndex > 0)
+                    Expanded(
+                      child: CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: _previousStep,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1C1C1E),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: CupertinoColors.activeBlue,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(
+                                CupertinoIcons.chevron_back,
+                                size: 18,
+                                color: CupertinoColors.activeBlue,
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'Назад',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: CupertinoColors.activeBlue,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                              ],
+                              ),
                             ],
                           ),
                         ),
-                        if (showSidebar) ...[
-                          const SizedBox(width: 24),
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 280,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        if (_currentStepIndex > 0)
-                                          Expanded(
-                                            child: CupertinoButton(
-                                              padding: EdgeInsets.zero,
-                                              onPressed: _previousStep,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFF1C1C1E),
-                                                  borderRadius: BorderRadius.circular(10),
-                                                  border: Border.all(
-                                                    color: CupertinoColors.activeBlue,
-                                                    width: 1,
-                                                  ),
-                                                ),
-                                                child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: const [
-                                                    Icon(
-                                                      CupertinoIcons.chevron_back,
-                                                      size: 18,
-                                                      color: CupertinoColors.activeBlue,
-                                                    ),
-                                                    SizedBox(width: 6),
-                                                    Text(
-                                                      'Назад',
-                                                      style: TextStyle(
-                                                        fontSize: 15,
-                                                        color: CupertinoColors.activeBlue,
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        if (_currentStepIndex > 0) const SizedBox(width: 12),
-                                        Expanded(
-                                          child: CupertinoButton(
-                                            padding: EdgeInsets.zero,
-                                            onPressed: () => Navigator.of(context).pop(),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(vertical: 12),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF1C1C1E),
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(
-                                                  color: CupertinoColors.systemRed,
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: const Center(
-                                                child: Text(
-                                                  'Отмена',
-                                                  style: TextStyle(
-                                                    fontSize: 15,
-                                                    color: CupertinoColors.systemRed,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    BookingSidebar(
-                                      steps: steps,
-                                      currentStepIndex: _currentStepIndex,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-                // === ИЗМЕНЕНО: Блок отображения клавиатуры ===
-                if (showKeyboard)
-                  Center(
-                    child: SizedBox(
-                      // Numpad можно сделать уже
-                      width: showNumpad ? 400 : 1200,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 20.0, left: 20.0, right: 20.0),
-                        // Выбираем какую клавиатуру показать
-                        child: showNumpad
-                            ? NumpadKeyboard(onKeyPressed: _onNumpadKeyPressed)
-                            : CustomKeyboard(
-                          onKeyPressed: _keyboardNotifier.onKeyPressed,
-                          // Убираем цифры на экране ввода ФИО
-                          showNumbers: !showGuestKeyboard,
+                  if (state.currentStepIndex > 0) const SizedBox(width: 12),
+                  Expanded(
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1C1C1E),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: CupertinoColors.systemRed,
+                            width: 1,
+                          ),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Отмена',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: CupertinoColors.systemRed,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
-              ],
-            ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              BookingSidebar(
+                steps: state.steps,
+                currentStepIndex: state.currentStepIndex,
+              ),
+            ],
           ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildCurrentStepWidget() {
-    switch (_currentStep) {
+  Widget _buildCurrentStepWidget(BookingState state) {
+    final cubit = context.read<BookingCubit>();
+
+    switch (state.currentStep) {
       case BookingStep.buildingSelection:
         return StepBuildingSelection(
           key: const ValueKey('building'),
-          selectedBuilding: _bookingData.selectedBuilding,
-          onBuildingSelected: (building) => setState(() => _bookingData.selectedBuilding = building),
+          selectedBuilding: state.bookingData.selectedBuilding,
+          onBuildingSelected: cubit.setBuilding,
         );
       case BookingStep.roomSelection:
         return StepRoomSelection(
           key: const ValueKey('room'),
-          roomNumber: _roomNumberInput,
-          selectedBuilding: _bookingData.selectedBuilding,
-          selectedRoomType: _selectedRoomType,
+          roomNumber: _roomInputManager.roomNumberInput,
+          selectedBuilding: state.bookingData.selectedBuilding,
+          selectedRoomType: _roomInputManager.selectedRoomType,
           onRoomTypeSelected: (type) {
             setState(() {
-              _selectedRoomType = type;
-              if (_bookingData.selectedRoom != null) {
-                _bookingData.selectedRoom = Room(
-                  id: _bookingData.selectedRoom!.id,
-                  name: _bookingData.selectedRoom!.name,
-                  buildingId: _bookingData.selectedRoom!.buildingId,
-                  type: type,
-                );
-              }
+              _roomInputManager.setRoomType(type);
+              cubit.setRoomType(type);
             });
           },
         );
       case BookingStep.guestInfo:
         return StepGuestInfo(
           key: const ValueKey('guest'),
-          onChanged: (first, last, middle) => setState(() {
-            _bookingData.firstName = first;
-            _bookingData.lastName = last;
-            _bookingData.middleName = middle;
-          }),
-          lastNameController: _lastNameController,
-          firstNameController: _firstNameController,
-          middleNameController: _middleNameController,
-          lastNameFocusNode: _lastNameFocusNode,
-          firstNameFocusNode: _firstNameFocusNode,
-          middleNameFocusNode: _middleNameFocusNode,
-          focusedFieldIndex: _focusedFieldIndex,
+          onChanged: (first, last, middle) => cubit.setGuestData(
+            firstName: first,
+            lastName: last,
+            middleName: middle,
+          ),
+          lastNameController: _keyboardManager.lastNameController,
+          firstNameController: _keyboardManager.firstNameController,
+          middleNameController: _keyboardManager.middleNameController,
+          lastNameFocusNode: _keyboardManager.lastNameFocusNode,
+          firstNameFocusNode: _keyboardManager.firstNameFocusNode,
+          middleNameFocusNode: _keyboardManager.middleNameFocusNode,
+          focusedFieldIndex: _keyboardManager.focusedFieldIndex,
         );
       case BookingStep.categorySelection:
         return StepCategorySelection(
           key: const ValueKey('category'),
-          selectedCategory: _bookingData.selectedCategory,
-          onCategorySelected: (category) => setState(() {
-            _bookingData.selectedCategory = category;
-            _bookingData.selectedItems.clear();
-          }),
+          selectedCategory: state.bookingData.selectedCategory,
+          onCategorySelected: cubit.setCategory,
         );
       case BookingStep.period:
         return StepPeriod(
           key: const ValueKey('period'),
-          checkIn: _bookingData.checkInDate,
-          checkOut: _bookingData.checkOutDate,
-          onDatesChanged: (checkIn, checkOut) => setState(() {
-            _bookingData.checkInDate = checkIn;
-            _bookingData.checkOutDate = checkOut;
-          }),
+          checkIn: state.bookingData.checkInDate,
+          checkOut: state.bookingData.checkOutDate,
+          onDatesChanged: cubit.setDates,
         );
       case BookingStep.itemSelection:
         return StepItemSelection(
           key: const ValueKey('items'),
-          category: _bookingData.selectedCategory,
-          selectedItems: _bookingData.selectedItems,
-          onItemsChanged: (items) => setState(() => _bookingData.selectedItems = items),
+          category: state.bookingData.selectedCategory,
+          selectedItems: state.bookingData.selectedItems,
+          onItemsChanged: cubit.setSelectedItems,
         );
       case BookingStep.payment:
         return StepPayment(
           key: const ValueKey('payment'),
-          selectedMethod: _bookingData.paymentMethod,
-          onMethodSelected: (method) => setState(() => _bookingData.paymentMethod = method),
-          totalPrice: _bookingData.totalPrice,
+          selectedMethod: state.bookingData.paymentMethod,
+          onMethodSelected: cubit.setPaymentMethod,
+          totalPrice: state.bookingData.totalPrice,
         );
       case BookingStep.confirmation:
         return StepConfirmation(
           key: const ValueKey('confirm'),
-          data: _bookingData,
-          onSuccess: () {
-            setState(() => _currentStepIndex++);
-          },
+          data: state.bookingData.data,
+          onSuccess: () => cubit.nextStep(),
           onError: _onBookingError,
         );
       case BookingStep.paymentExecution:
         return StepPaymentExecution(
           key: const ValueKey('payment_execution'),
-          paymentMethod: _bookingData.paymentMethod ?? 'СБП',
-          totalPrice: _bookingData.totalPrice,
+          paymentMethod: state.bookingData.paymentMethod ?? 'СБП',
+          totalPrice: state.bookingData.totalPrice,
           onPaymentComplete: _onBookingSuccess,
           onPaymentTimeout: () {
             showCupertinoDialog(
@@ -628,9 +483,12 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
                     isDefaultAction: true,
                     onPressed: () {
                       Navigator.of(ctx).pop();
-                      setState(() {
-                        _currentStepIndex = steps.indexOf(BookingStep.payment);
-                      });
+                      // Возвращаемся к шагу оплаты
+                      final newIndex = state.steps.indexOf(BookingStep.payment);
+                      // Нужно вручную установить индекс
+                      while (cubit.state.currentStepIndex > newIndex) {
+                        cubit.previousStep();
+                      }
                     },
                     child: const Text('OK'),
                   ),
@@ -642,14 +500,16 @@ class _RoomBookingScreenState extends State<RoomBookingScreen> {
       case BookingStep.success:
         return StepSuccess(
           key: const ValueKey('success'),
-          totalPrice: _bookingData.totalPrice,
+          totalPrice: state.bookingData.totalPrice,
           paymentDateTime: _paymentDateTime ?? DateTime.now(),
         );
     }
   }
 
-  Widget _buildBottomButton() {
-    final canProceed = _canProceed();
+  Widget _buildBottomButton(BuildContext context) {
+    final cubit = context.read<BookingCubit>();
+    final canProceed = cubit.canProceed();
+
     return CupertinoButton(
       color: CupertinoColors.activeBlue,
       disabledColor: const Color(0xFF2C2C2E),

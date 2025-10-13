@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:motel/presentation/screensaver_settings/screensaver_settings_screen.dart';
 import 'package:motel/presentation/settings/change_password_screen.dart';
-import 'package:motel/presentation/settings/desktop_background_settings_screen.dart';
 import 'package:motel/presentation/settings/services_settings_screen.dart';
 import 'package:motel/presentation/settings/fines_settings_screen.dart';
 import 'package:motel/presentation/settings/transactions_screen.dart';
