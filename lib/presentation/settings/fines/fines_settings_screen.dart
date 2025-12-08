@@ -5,6 +5,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/constants/permissions_mapping.dart';
+import 'package:motel/core/services/permissions_service.dart';
 import 'package:motel/domain/models/fine_models.dart';
 import 'package:motel/domain/usecases/get_fines.dart';
 import 'package:motel/domain/usecases/delete_fine.dart';
@@ -20,14 +22,32 @@ class FinesSettingsScreen extends StatefulWidget {
 class _FinesSettingsScreenState extends State<FinesSettingsScreen> {
   final _getFinesUseCase = GetFinesUseCase(ApiClient.instance);
   final _deleteFineUseCase = DeleteFineUseCase(ApiClient.instance);
+  final _permissionsService = PermissionsService();
 
   List<Fine>? _fines;
   bool _isLoading = false;
+  bool _canAddFine = false;
+  bool _canUpdateFine = false;
+  bool _canDeleteFine = false;
 
   @override
   void initState() {
     super.initState();
     _loadFines();
+    _loadPermissions();
+  }
+
+  Future<void> _loadPermissions() async {
+    final canAdd = await _permissionsService.hasPermission(PermissionsMapping.finesAdd);
+    final canUpdate = await _permissionsService.hasPermission(PermissionsMapping.finesUpdate);
+    final canDelete = await _permissionsService.hasPermission(PermissionsMapping.finesDelete);
+    if (mounted) {
+      setState(() {
+        _canAddFine = canAdd;
+        _canUpdateFine = canUpdate;
+        _canDeleteFine = canDelete;
+      });
+    }
   }
 
   Future<void> _loadFines() async {
@@ -90,23 +110,24 @@ class _FinesSettingsScreenState extends State<FinesSettingsScreen> {
               _buildFinesList(),
 
               // Кнопка добавления штрафа
-              SliverToBoxAdapter(
-                child: CupertinoListSection.insetGrouped(
-                  children: [
-                    CupertinoListTile(
-                      title: const Text(
-                        'Добавить штраф',
-                        style: TextStyle(color: CupertinoColors.activeBlue),
+              if (_canAddFine)
+                SliverToBoxAdapter(
+                  child: CupertinoListSection.insetGrouped(
+                    children: [
+                      CupertinoListTile(
+                        title: const Text(
+                          'Добавить штраф',
+                          style: TextStyle(color: CupertinoColors.activeBlue),
+                        ),
+                        leading: const Icon(
+                          CupertinoIcons.add_circled_solid,
+                          color: CupertinoColors.activeBlue,
+                        ),
+                        onTap: () => _navigateAndReload(const FineEditScreen()),
                       ),
-                      leading: const Icon(
-                        CupertinoIcons.add_circled_solid,
-                        color: CupertinoColors.activeBlue,
-                      ),
-                      onTap: () => _navigateAndReload(const FineEditScreen()),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
           if (_isLoading && _fines == null)
@@ -154,6 +175,29 @@ class _FinesSettingsScreenState extends State<FinesSettingsScreen> {
   }
 
   Widget _buildFineItem(Fine fine) {
+    // Если нет права на удаление, показываем обычный ListTile
+    if (!_canDeleteFine) {
+      return CupertinoListTile(
+        title: Text(fine.name),
+        subtitle: Text(
+          '${fine.price ~/ 100} ₽',
+          style: const TextStyle(
+            color: CupertinoColors.systemRed,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        trailing: _canUpdateFine
+            ? const Icon(
+                CupertinoIcons.pencil,
+                color: CupertinoColors.systemGrey,
+                size: 20,
+              )
+            : null,
+        onTap: _canUpdateFine ? () => _navigateAndReload(FineEditScreen(fine: fine)) : null,
+      );
+    }
+
+    // Если есть право на удаление, показываем Dismissible
     return Dismissible(
       key: Key(fine.id.toString()),
       direction: DismissDirection.endToStart,
@@ -214,12 +258,14 @@ class _FinesSettingsScreenState extends State<FinesSettingsScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        trailing: const Icon(
-          CupertinoIcons.pencil,
-          color: CupertinoColors.systemGrey,
-          size: 20,
-        ),
-        onTap: () => _navigateAndReload(FineEditScreen(fine: fine)),
+        trailing: _canUpdateFine
+            ? const Icon(
+                CupertinoIcons.pencil,
+                color: CupertinoColors.systemGrey,
+                size: 20,
+              )
+            : null,
+        onTap: _canUpdateFine ? () => _navigateAndReload(FineEditScreen(fine: fine)) : null,
       ),
     );
   }

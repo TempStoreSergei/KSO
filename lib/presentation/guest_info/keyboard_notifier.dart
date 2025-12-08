@@ -59,7 +59,7 @@ class KeyboardNotifier extends ChangeNotifier {
         _insertText(' ');
         break;
       case 'LANG':
-        print("Language key pressed");
+        debugPrint("Language key pressed");
         break;
       default:
         final textToInsert = _isShiftEnabled ? key.toUpperCase() : key.toLowerCase();

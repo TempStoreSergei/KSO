@@ -6,6 +6,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cookie_jar/cookie_jar.dart';
+import 'package:motel/core/services/permissions_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_exceptions.dart';
 
 class ApiClient {
@@ -14,8 +16,24 @@ class ApiClient {
   }
   static final ApiClient instance = ApiClient._privateConstructor();
 
-  final String _baseUrl = dotenv.env['BASE_URL']!;
+  String _baseUrl = dotenv.env['BASE_URL']!;
   late final CookieJar _cookieJar;
+  
+  String get baseUrl => _baseUrl;
+
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString('BASE_URL');
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      _baseUrl = savedUrl;
+    }
+  }
+
+  Future<void> setBaseUrl(String url) async {
+    _baseUrl = url;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('BASE_URL', url);
+  }
 
   Future<Map<String, String>> _getHeaders({Map<String, String>? customHeaders}) async {
     final headers = {
@@ -153,22 +171,27 @@ class ApiClient {
   }
 
   // Метод для расчета цены проживания
-  Future<int> calculateRoomPrice({
+  Future<int?> calculateRoomPrice({
     required String roomType,
     required int roomBuilding,
     required int countDays,
   }) async {
-    final response = await post('/guests/calculate_room_price', body: {
+    final response = await post('/transactions/calculate_room_price', body: {
       'roomType': roomType,
       'roomBuilding': roomBuilding,
       'countDays': countDays,
     });
-    return response['summRoomRrice'] as int;
+
+    return response['summRoomPrice'];
   }
 
   // Метод для выхода (очистка cookies)
   Future<void> logout() async {
     await _cookieJar.deleteAll();
+
+    // Очищаем роль пользователя
+    final permissionsService = PermissionsService();
+    await permissionsService.clearUserRole();
   }
 
   // Метод для получения метрик
@@ -187,6 +210,59 @@ class ApiClient {
   Future<Map<String, dynamic>> stopTelegramBot() async {
     final response = await post('/notifications/tg/stop');
     return response as Map<String, dynamic>;
+  }
+
+  // Метод для экспорта цен на проживание
+  Future<String> exportRoomPrices() async {
+    final response = await get('/transactions/export_room_prices');
+    return response['url'] as String;
+  }
+
+  // Метод для загрузки CSV файла с ценами на проживание
+  Future<dynamic> loadRoomPrices(XFile file) async {
+    dynamic responseJson;
+    try {
+      final url = Uri.parse(_baseUrl + '/transactions/load_room_prices');
+      final request = http.MultipartRequest('POST', url);
+
+      request.headers['accept'] = 'application/json';
+
+      // Добавляем cookies
+      final cookies = await _cookieJar.loadForRequest(url);
+      if (cookies.isNotEmpty) {
+        request.headers['Cookie'] = cookies.map((cookie) => '${cookie.name}=${cookie.value}').join('; ');
+      }
+
+      if (kIsWeb) {
+        request.files.add(http.MultipartFile.fromBytes('file', await file.readAsBytes(), filename: file.name));
+      } else {
+        request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      _saveCookies(url, response);
+      responseJson = _processResponse(response);
+    } on SocketException {
+      throw FetchDataException('Нет интернет-соединения');
+    }
+    return responseJson;
+  }
+
+  // Метод для экспорта транзакций
+  Future<String> exportTransactions() async {
+    final response = await get('/transactions/export_transactions');
+    return response['url'] as String;
+  }
+
+  // Метод для печати чека
+  Future<bool> printCheck(Map<String, dynamic> checkData) async {
+    try {
+      await post('/payments/pay_order', body: checkData);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   dynamic _processResponse(http.Response response) {

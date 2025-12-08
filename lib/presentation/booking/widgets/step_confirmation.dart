@@ -29,23 +29,8 @@ class _StepConfirmationState extends State<StepConfirmation> {
   bool _isLoading = false;
 
   Future<void> _submit() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final useCase = SaveTransactionUseCase(ApiClient.instance);
-      await useCase.call(widget.data);
-      widget.onSuccess();
-    } catch (e) {
-      widget.onError('Ошибка при отправке данных: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+    // Больше не отправляем API запрос отсюда
+    widget.onSuccess();
   }
 
   @override
@@ -71,8 +56,8 @@ class _StepConfirmationState extends State<StepConfirmation> {
                 const SizedBox(height: 12),
                 _buildInfoRow('Категория:', _getCategoryName(widget.data.selectedCategory)),
                 if (widget.data.selectedCategory == BookingCategory.accommodation) ...[
-                  _buildInfoRow('Заезд:', DateFormat('dd.MM.yyyy', 'ru').format(widget.data.checkInDate)),
-                  _buildInfoRow('Выезд:', DateFormat('dd.MM.yyyy', 'ru').format(widget.data.checkOutDate)),
+                  _buildInfoRow('Заезд:', widget.data.checkInDate != null ? DateFormat('dd.MM.yyyy', 'ru').format(widget.data.checkInDate!) : 'Не выбрано'),
+                  _buildInfoRow('Выезд:', widget.data.checkOutDate != null ? DateFormat('dd.MM.yyyy', 'ru').format(widget.data.checkOutDate!) : 'Не выбрано'),
                   _buildInfoRow('Ночей:', widget.data.totalNights.toString()),
                 ],
                 if (widget.data.selectedItems.isNotEmpty) ...[
@@ -92,12 +77,12 @@ class _StepConfirmationState extends State<StepConfirmation> {
 
                     if (item.isCountable) {
                       itemText += ' (×${item.quantity})';
-                      priceText = '${item.price} × ${item.quantity} = ${item.totalPrice} ₽';
+                      priceText = '${item.price ~/ 100} × ${item.quantity} = ${item.totalPrice ~/ 100} ₽';
                     } else if (item.isDuration) {
                       itemText += ' (${item.quantity} ${_getDaysText(item.quantity)})';
-                      priceText = '${item.price} × ${item.quantity} = ${item.totalPrice} ₽';
+                      priceText = '${item.price ~/ 100} × ${item.quantity} = ${item.totalPrice ~/ 100} ₽';
                     } else {
-                      priceText = '${item.totalPrice} ₽';
+                      priceText = '${item.totalPrice ~/ 100} ₽';
                     }
 
                     return _buildInfoRow(itemText, priceText);
@@ -106,7 +91,7 @@ class _StepConfirmationState extends State<StepConfirmation> {
                 const SizedBox(height: 12),
                 _buildInfoRow('Оплата:', widget.data.paymentMethod ?? 'Не выбран'),
                 const SizedBox(height: 20),
-                _buildInfoRow('ИТОГО:', '${widget.data.totalPrice} ₽', isTotal: true),
+                _buildInfoRow('ИТОГО:', '${widget.data.totalPrice ~/ 100} ₽', isTotal: true),
               ],
             ),
           ),
@@ -166,11 +151,14 @@ class _StepConfirmationState extends State<StepConfirmation> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: CupertinoColors.systemGrey,
-              fontSize: isTotal ? 18 : 16,
+          Flexible(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: CupertinoColors.systemGrey,
+                fontSize: isTotal ? 18 : 16,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           Text(

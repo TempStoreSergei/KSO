@@ -13,41 +13,6 @@ enum WebSocketConnectionState {
   error,
 }
 
-class OrderData {
-  final String datetime;
-  final int sum;
-  final int avance;
-  final String type;
-  final String paymentType;
-  final String returnType;
-  final List<Map<String, dynamic>> cart;
-  final String order;
-
-  OrderData({
-    required this.datetime,
-    required this.sum,
-    required this.avance,
-    required this.type,
-    required this.paymentType,
-    required this.returnType,
-    required this.cart,
-    required this.order,
-  });
-
-  factory OrderData.fromJson(Map<String, dynamic> json) {
-    return OrderData(
-      datetime: json['datetime'] ?? '',
-      sum: json['sum'] ?? 0,
-      avance: json['avance'] ?? 0,
-      type: json['type'] ?? '',
-      paymentType: json['payment_type'] ?? '',
-      returnType: json['return_type'] ?? '',
-      cart: List<Map<String, dynamic>>.from(json['cart'] ?? []),
-      order: json['order'] ?? '',
-    );
-  }
-}
-
 class WebSocketService extends ChangeNotifier {
   static final WebSocketService _instance = WebSocketService._internal();
   factory WebSocketService() => _instance;
@@ -58,13 +23,10 @@ class WebSocketService extends ChangeNotifier {
   WebSocketConnectionState _state = WebSocketConnectionState.disconnected;
   String? _errorMessage;
   bool _isAdminMode = false;
-  final List<OrderData> _allOrders = [];
-  List<OrderData> get allOrders => List.unmodifiable(_allOrders);
 
   // Stream controllers для разных типов событий
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionStateController = StreamController<WebSocketConnectionState>.broadcast();
-  final _orderDataController = StreamController<OrderData>.broadcast();
 
   // Getters
   WebSocketConnectionState get state => _state;
@@ -72,7 +34,6 @@ class WebSocketService extends ChangeNotifier {
   bool get isConnected => _state == WebSocketConnectionState.connected;
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   Stream<WebSocketConnectionState> get connectionStateStream => _connectionStateController.stream;
-  Stream<OrderData> get orderDataStream => _orderDataController.stream;
 
   // Получаем WebSocket URL из .env
   String get _wsUrl {
@@ -160,21 +121,6 @@ class WebSocketService extends ChangeNotifier {
 
       debugPrint('WebSocket: получено сообщение - $message');
 
-      final eventType = message['event'];
-
-      if (eventType == 'getOrderData') {
-        final orderData = OrderData.fromJson(message['data']);
-
-        // ДОБАВЛЯЕМ заказ в список, а не заменяем
-        _allOrders.add(orderData);
-
-        _orderDataController.add(orderData);
-        debugPrint(
-            'WebSocket: получен заказ - ${orderData.order}, сумма: ${orderData
-                .sum}');
-        debugPrint('WebSocket: всего заказов в списке: ${_allOrders.length}');
-      }
-
       _messageController.add(message);
     } catch (e, stackTrace) {
       debugPrint('WebSocket: ошибка парсинга сообщения - $e');
@@ -186,20 +132,6 @@ class WebSocketService extends ChangeNotifier {
     _errorMessage = error.toString();
     _updateState(WebSocketConnectionState.error);
     debugPrint('WebSocket: ошибка - $error');
-  }
-
-  void clearOrders() {
-    _allOrders.clear();
-    notifyListeners();
-    debugPrint('WebSocket: список заказов очищен');
-  }
-
-  List<Map<String, dynamic>> getAllCartItems() {
-    final allItems = <Map<String, dynamic>>[];
-    for (final order in _allOrders) {
-      allItems.addAll(order.cart);
-    }
-    return allItems;
   }
 
   // Обработка закрытия соединения
@@ -220,7 +152,6 @@ class WebSocketService extends ChangeNotifier {
     disconnect();
     _messageController.close();
     _connectionStateController.close();
-    _orderDataController.close();
     super.dispose();
   }
 }

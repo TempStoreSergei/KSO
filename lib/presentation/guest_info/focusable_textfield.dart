@@ -36,10 +36,10 @@ class FocusableTextField extends StatelessWidget {
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isActive ? Colors.white : Colors.white.withOpacity(0.24),
+                color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.24),
                 width: isActive ? 2 : 1,
               ),
             ),
@@ -48,7 +48,7 @@ class FocusableTextField extends StatelessWidget {
                 focusNode: focusNode,
                 controller: controller,
                 placeholder: placeholder,
-                placeholderStyle: TextStyle(color: CupertinoColors.white.withOpacity(0.54), fontSize: scaleText(context, 20)),
+                placeholderStyle: TextStyle(color: CupertinoColors.white.withValues(alpha: 0.54), fontSize: scaleText(context, 20)),
                 readOnly: true,
                 showCursor: true,
                 cursorColor: CupertinoColors.white,
@@ -72,7 +72,7 @@ class FocusableTextField extends StatelessWidget {
               opacity: isActive ? 1.0 : 0.0,
               child: isActive
                   ? CircleAvatar(
-                backgroundColor: Colors.white.withOpacity(0.8),
+                backgroundColor: Colors.white.withValues(alpha: 0.8),
                 child: const Icon(Icons.arrow_right_alt, color: Colors.black54),
               )
                   : const SizedBox.shrink(),

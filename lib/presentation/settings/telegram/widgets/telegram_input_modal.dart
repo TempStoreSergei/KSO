@@ -43,61 +43,46 @@ class TelegramInputModal extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 CupertinoButton(
-                  child: const Text('Отмена'),
                   onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Отмена'),
                 ),
                 Text(
                   title,
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                 ),
                 CupertinoButton(
-                  child: const Text('Сохранить'),
                   onPressed: onSave,
+                  child: const Text('Сохранить'),
                 ),
               ],
             ),
           ),
-          // --- ИСПРАВЛЕННЫЙ БЛОК ВВОДА В СТИЛЕ LIST SECTION ---
+          // --- БЛОК ВВОДА В СТИЛЕ telegram_settings_screen ---
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
                 CupertinoListSection.insetGrouped(
-                  // Убираем фоновый цвет секции, чтобы просвечивал фон модального окна
                   backgroundColor: CupertinoColors.systemBackground.resolveFrom(context),
-                  // Добавим отступ сверху для визуального отделения от навигационной панели
                   margin: const EdgeInsets.only(left: 20.0, right: 20.0, top: 16.0),
                   children: [
-                    CupertinoTextField(
-                      controller: controller,
-                      placeholder: placeholder,
-                      // !!! Главное изменение: убираем стандартное оформление TextField,
-                      // чтобы он выглядел как элемент списка.
-                      decoration: null,
-                      // Используем prefix для метки (аналог title в list tile)
-                      prefix: Padding(
-                        padding: const EdgeInsets.only(left: 0.0),
-                        child: Text(
-                          title,
-                          style: TextStyle(
-                            color: CupertinoColors.label.resolveFrom(context),
-                            fontSize: 17.0,
-                          ),
+                    CupertinoListTile(
+                      title: Text(title),
+                      additionalInfo: Expanded(
+                        child: CupertinoTextField(
+                          controller: controller,
+                          textAlign: TextAlign.end,
+                          style: const TextStyle(color: CupertinoColors.systemGrey),
+                          decoration: null,
+                          placeholder: placeholder,
                         ),
                       ),
-                      // Выравнивание текста ввода по правому краю — нативный паттерн iOS
-                      textAlign: TextAlign.right,
-                      // Добавляем padding для текста ввода внутри ячейки списка
-                      padding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 0.0),
-                      // Опционально: кнопка очистки при редактировании
-                      clearButtonMode: OverlayVisibilityMode.editing,
                     ),
                   ],
                 ),
               ],
             ),
           ),
-          // -----------------------------------------------------------------
         ],
       ),
     );

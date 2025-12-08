@@ -15,7 +15,7 @@ class GetServices {
       print("[GetServices] Выполняю запрос на /guests/get_services...");
 
       // === ИСПРАВЛЕНИЕ: 'responseData' теперь является Map<String, dynamic>, а не Response ===
-      final responseData = await _apiClient.get('/guests/get_services');
+      final responseData = await _apiClient.get('/services/get_services');
 
       // Мы предполагаем, что если запрос не удался (статус не 200), ApiClient выбросит исключение.
       // Поэтому проверка 'if (response.statusCode == 200)' здесь не нужна и является ошибкой.

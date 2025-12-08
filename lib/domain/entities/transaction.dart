@@ -1,24 +1,26 @@
-// ============================================
-// lib/domain/entities/transaction.dart
-// ============================================
+// Represents the structure of a single transaction from the API response
 
 class Transaction {
   final int id;
   final TransactionGuest guest;
   final List<TransactionService> services;
+  final List<TransactionFine> fines;
   final TransactionRoom room;
-  final DateTime checkIn;
-  final DateTime checkOut;
   final String paymentType;
+  final bool sentTo1c;
+  final bool sentSuccessfully;
+  final String? errorMessage;
 
   Transaction({
     required this.id,
     required this.guest,
     required this.services,
+    required this.fines,
     required this.room,
-    required this.checkIn,
-    required this.checkOut,
     required this.paymentType,
+    required this.sentTo1c,
+    required this.sentSuccessfully,
+    this.errorMessage,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
@@ -28,10 +30,14 @@ class Transaction {
       services: (json['services'] as List)
           .map((s) => TransactionService.fromJson(s))
           .toList(),
+      fines: (json['fines'] as List)
+          .map((f) => TransactionFine.fromJson(f))
+          .toList(),
       room: TransactionRoom.fromJson(json['room']),
-      checkIn: DateTime.parse(json['checkIn']),
-      checkOut: DateTime.parse(json['checkOut']),
       paymentType: json['paymentType'],
+      sentTo1c: json['sentTo1c'] ?? false,
+      sentSuccessfully: json['sentSuccessfully'] ?? false,
+      errorMessage: json['errorMessage'],
     );
   }
 }
@@ -52,8 +58,8 @@ class TransactionGuest {
   factory TransactionGuest.fromJson(Map<String, dynamic> json) {
     return TransactionGuest(
       id: json['id'],
-      firstName: json['firstName'],
-      lastName: json['lastName'],
+      firstName: json['firstName'] ?? '',
+      lastName: json['lastName'] ?? '',
       surname: json['surname'] ?? '',
     );
   }
@@ -64,12 +70,20 @@ class TransactionService {
   final String name;
   final int price;
   final int tax;
+  final int count;
+  final int? duration; // Can be null
+  final String serviceCode;
+  final int totalPrice;
 
   TransactionService({
     required this.id,
     required this.name,
     required this.price,
     required this.tax,
+    required this.count,
+    this.duration,
+    required this.serviceCode,
+    required this.totalPrice,
   });
 
   factory TransactionService.fromJson(Map<String, dynamic> json) {
@@ -78,23 +92,53 @@ class TransactionService {
       name: json['name'],
       price: json['price'],
       tax: json['tax'],
+      count: json['count'],
+      duration: json['duration'], // Will be null if not present
+      serviceCode: json['serviceCode'] ?? '',
+      totalPrice: json['totalPrice'],
+    );
+  }
+}
+
+class TransactionFine {
+  final int id;
+  final int count;
+
+  TransactionFine({required this.id, required this.count});
+
+  factory TransactionFine.fromJson(Map<String, dynamic> json) {
+    return TransactionFine(
+      id: json['id'],
+      count: json['count'],
     );
   }
 }
 
 class TransactionRoom {
-  final int id;
-  final String name;
+  final String number;
+  final String type;
+  final int building;
+  final int? countDays; // Can be null
+  final int price;
+  final int? totalPrice; // Can be null
 
   TransactionRoom({
-    required this.id,
-    required this.name,
+    required this.number,
+    required this.type,
+    required this.building,
+    this.countDays,
+    required this.price,
+    this.totalPrice,
   });
 
   factory TransactionRoom.fromJson(Map<String, dynamic> json) {
     return TransactionRoom(
-      id: json['id'],
-      name: json['name'],
+      number: json['number'],
+      type: json['type'],
+      building: json['building'],
+      countDays: json['countDays'],
+      price: json['price'],
+      totalPrice: json['totalPrice'],
     );
   }
 }

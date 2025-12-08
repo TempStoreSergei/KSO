@@ -17,7 +17,7 @@ class ServiceRemoteDataSourceImpl implements ServiceRemoteDataSource {
 
   @override
   Future<List<ServiceModel>> getServices() async {
-    final response = await apiClient.get('/guests/get_services');
+    final response = await apiClient.get('/services/get_services');
     final List<dynamic> servicesData = response['services'] ?? [];
     return servicesData.map((json) => ServiceModel.fromJson(json)).toList();
   }
@@ -25,7 +25,7 @@ class ServiceRemoteDataSourceImpl implements ServiceRemoteDataSource {
   @override
   Future<void> createService({required String name, int? price, required int tax, required bool isCountable, required bool isDuration}) async {
     await apiClient.post(
-      '/guests/add_services',
+      '/services/add_services',
       body: {
         'name': name,
         'price': price,
@@ -54,7 +54,7 @@ class ServiceRemoteDataSourceImpl implements ServiceRemoteDataSource {
   @override
   Future<void> deleteService({required String serviceID}) async {
     await apiClient.delete(
-      '/guests/delete_service?service_id=$serviceID',
+      '/services/delete_service?service_id=$serviceID',
     );
   }
 }

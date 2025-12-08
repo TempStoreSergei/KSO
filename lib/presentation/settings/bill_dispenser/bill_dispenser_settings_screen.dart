@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/constants/permissions_mapping.dart';
+import 'package:motel/presentation/widgets/permission_widget.dart';
 import 'cubit/bill_dispenser_cubit.dart';
 import 'cubit/bill_dispenser_state.dart';
 import 'models/test_status.dart';
@@ -145,51 +147,63 @@ class _BillDispenserSettingsView extends StatelessWidget {
 
                   return SliverMainAxisGroup(
                     slivers: [
-                      // Текущее состояние
+                      // Текущее состояние (доступно всем)
                       SliverToBoxAdapter(
                         child: StatusSection(status: status),
                       ),
 
                       // Настройка количества
                       SliverToBoxAdapter(
-                        child: CountSettingsSection(
-                          status: status,
-                          newUpperBoxCount: newUpperBoxCount,
-                          newLowerBoxCount: newLowerBoxCount,
-                          onUpdateCount: () => context.read<BillDispenserCubit>().updateCount(),
-                          onUpperCountChanged: (value) =>
-                              context.read<BillDispenserCubit>().updateNewUpperBoxCount(value),
-                          onLowerCountChanged: (value) =>
-                              context.read<BillDispenserCubit>().updateNewLowerBoxCount(value),
+                        child: PermissionWidget(
+                          permission: PermissionsMapping.billDispenserAddCount,
+                          child: CountSettingsSection(
+                            status: status,
+                            newUpperBoxCount: newUpperBoxCount,
+                            newLowerBoxCount: newLowerBoxCount,
+                            onUpdateCount: () => context.read<BillDispenserCubit>().updateCount(),
+                            onUpperCountChanged: (value) =>
+                                context.read<BillDispenserCubit>().updateNewUpperBoxCount(value),
+                            onLowerCountChanged: (value) =>
+                                context.read<BillDispenserCubit>().updateNewLowerBoxCount(value),
+                          ),
                         ),
                       ),
 
                       // Настройка номиналов
                       SliverToBoxAdapter(
-                        child: LevelSettingsSection(
-                          newUpperBoxValue: newUpperBoxValue,
-                          newLowerBoxValue: newLowerBoxValue,
-                          onUpdateLevels: () => context.read<BillDispenserCubit>().updateLevels(),
-                          onUpperValueChanged: (value) =>
-                              context.read<BillDispenserCubit>().updateNewUpperBoxValue(value),
-                          onLowerValueChanged: (value) =>
-                              context.read<BillDispenserCubit>().updateNewLowerBoxValue(value),
+                        child: PermissionWidget(
+                          permission: PermissionsMapping.billDispenserSetNominal,
+                          child: LevelSettingsSection(
+                            newUpperBoxValue: newUpperBoxValue,
+                            newLowerBoxValue: newLowerBoxValue,
+                            onUpdateLevels: () => context.read<BillDispenserCubit>().updateLevels(),
+                            onUpperValueChanged: (value) =>
+                                context.read<BillDispenserCubit>().updateNewUpperBoxValue(value),
+                            onLowerValueChanged: (value) =>
+                                context.read<BillDispenserCubit>().updateNewLowerBoxValue(value),
+                          ),
                         ),
                       ),
 
                       // Тестирование
                       SliverToBoxAdapter(
-                        child: TestSection(
-                          status: status,
-                          testStatus: testStatus,
-                          onTestDispenser: () => context.read<BillDispenserCubit>().testDispenser(),
+                        child: PermissionWidget(
+                          permission: PermissionsMapping.billDispenserTest,
+                          child: TestSection(
+                            status: status,
+                            testStatus: testStatus,
+                            onTestDispenser: () => context.read<BillDispenserCubit>().testDispenser(),
+                          ),
                         ),
                       ),
 
                       // Действия
                       SliverToBoxAdapter(
-                        child: ActionsSection(
-                          onResetCount: () => _showResetConfirmation(context),
+                        child: PermissionWidget(
+                          permission: PermissionsMapping.billDispenserReset,
+                          child: ActionsSection(
+                            onResetCount: () => _showResetConfirmation(context),
+                          ),
                         ),
                       ),
                     ],

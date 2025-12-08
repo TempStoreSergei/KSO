@@ -19,6 +19,8 @@ class BookingSidebar extends StatelessWidget {
     switch (step) {
       case BookingStep.buildingSelection:
         return 'Выбор корпуса';
+      case BookingStep.roomTypeSelection:
+        return 'Тип комнаты';
       case BookingStep.roomSelection:
         return 'Выбор комнаты';
       case BookingStep.guestInfo:
@@ -35,6 +37,8 @@ class BookingSidebar extends StatelessWidget {
         return 'Подтверждение';
       case BookingStep.paymentExecution:
         return 'Оплата';
+      case BookingStep.paymentError:
+        return 'Ошибка оплаты';
       case BookingStep.success:
         return 'Завершено';
     }
@@ -44,6 +48,8 @@ class BookingSidebar extends StatelessWidget {
     switch (step) {
       case BookingStep.buildingSelection:
         return CupertinoIcons.building_2_fill;
+      case BookingStep.roomTypeSelection:
+        return CupertinoIcons.tag_fill;
       case BookingStep.roomSelection:
         return CupertinoIcons.bed_double_fill;
       case BookingStep.guestInfo:
@@ -60,6 +66,8 @@ class BookingSidebar extends StatelessWidget {
         return CupertinoIcons.checkmark_circle_fill;
       case BookingStep.paymentExecution:
         return CupertinoIcons.money_dollar_circle_fill;
+      case BookingStep.paymentError:
+        return CupertinoIcons.exclamationmark_circle_fill;
       case BookingStep.success:
         return CupertinoIcons.checkmark_seal_fill;
     }
@@ -67,7 +75,7 @@ class BookingSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displaySteps = steps.where((s) => s != BookingStep.success && s != BookingStep.paymentExecution).toList();
+    final displaySteps = steps.where((s) => s != BookingStep.success && s != BookingStep.paymentExecution && s != BookingStep.paymentError).toList();
 
     return Container(
       width: 280,

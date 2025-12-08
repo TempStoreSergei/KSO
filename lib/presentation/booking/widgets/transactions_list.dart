@@ -6,7 +6,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/domain/entities/transaction.dart';
 import 'package:motel/domain/usecases/get_transactions.dart';
-import 'package:intl/intl.dart';
 
 class TransactionsPanel extends StatefulWidget {
   final bool canLoad;
@@ -41,10 +40,6 @@ class _TransactionsPanelState extends State<TransactionsPanel> {
         _isLoading = false;
       });
     }
-  }
-
-  String _formatDate(DateTime date) {
-    return DateFormat('dd.MM.yyyy').format(date);
   }
 
   @override
@@ -153,7 +148,7 @@ class _TransactionsPanelState extends State<TransactionsPanel> {
                                       ),
                                     ),
                                     Text(
-                                      'Комната ${transaction.room.name}',
+                                      'Комната ${transaction.room.number}',
                                       style: const TextStyle(
                                         color: CupertinoColors.activeBlue,
                                         fontSize: 12,
@@ -170,14 +165,16 @@ class _TransactionsPanelState extends State<TransactionsPanel> {
                                     fontSize: 12,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${_formatDate(transaction.checkIn)} - ${_formatDate(transaction.checkOut)}',
-                                  style: const TextStyle(
-                                    color: CupertinoColors.systemGrey,
-                                    fontSize: 11,
+                                if (transaction.room.countDays != null && transaction.room.countDays! > 0) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Дней: ${transaction.room.countDays}',
+                                    style: const TextStyle(
+                                      color: CupertinoColors.systemGrey,
+                                      fontSize: 11,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           );

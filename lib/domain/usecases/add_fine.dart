@@ -14,7 +14,7 @@ class AddFineUseCase {
   Future<void> execute(CreateFineRequest request) async {
     try {
       await _apiClient.post(
-        '/guests/add_fine',
+        '/fines/add_fine',
         body: request.toJson(),
       );
     } catch (e) {

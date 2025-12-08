@@ -1,18 +1,13 @@
-// ============================================
-// lib/presentation/booking/room_booking_screen_refactored.dart
-// ============================================
-
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:motel/core/services/metrics_service.dart';
 import 'package:motel/domain/models/booking_models.dart';
-import 'package:motel/domain/usecases/calculate_room_price.dart';
+
 import 'package:motel/presentation/booking/cubit/booking_cubit.dart';
 import 'package:motel/presentation/booking/cubit/booking_state.dart';
 import 'package:motel/presentation/booking/managers/inactivity_manager.dart';
 import 'package:motel/presentation/booking/managers/keyboard_manager.dart';
-import 'package:motel/presentation/booking/managers/room_input_manager.dart';
 import 'package:motel/presentation/booking/widgets/booking_sidebar.dart';
 import 'package:motel/presentation/booking/widgets/step_building_selection.dart';
 import 'package:motel/presentation/booking/widgets/step_category_selection.dart';
@@ -23,10 +18,16 @@ import 'package:motel/presentation/booking/widgets/step_payment.dart';
 import 'package:motel/presentation/booking/widgets/step_payment_execution.dart';
 import 'package:motel/presentation/booking/widgets/step_period.dart';
 import 'package:motel/presentation/booking/widgets/step_room_selection.dart';
+import 'package:motel/presentation/booking/widgets/step_room_type_selection.dart';
 import 'package:motel/presentation/booking/widgets/step_success.dart';
+import 'package:motel/presentation/booking/widgets/step_payment_error.dart';
+import 'package:motel/core/services/websocket_service.dart';
 import 'package:motel/presentation/guest_info/custom_keyboard.dart';
-import 'package:motel/presentation/guest_info/numpad_keyboard.dart';
+import 'package:motel/presentation/lock_screen/lock_screen.dart';
 import 'package:provider/provider.dart';
+
+import 'package:motel/core/api/api_client.dart';
+import 'package:motel/domain/usecases/get_rooms.dart';
 
 class RoomBookingScreen extends StatelessWidget {
   const RoomBookingScreen({super.key});
@@ -34,7 +35,7 @@ class RoomBookingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => BookingCubit(),
+      create: (_) => BookingCubit(GetRooms(ApiClient.instance), MetricsService()),
       child: const _RoomBookingView(),
     );
   }
@@ -50,39 +51,60 @@ class _RoomBookingView extends StatefulWidget {
 class _RoomBookingViewState extends State<_RoomBookingView> {
   // Менеджеры
   late final KeyboardManager _keyboardManager;
-  late final RoomInputManager _roomInputManager;
   late final InactivityManager _inactivityManager;
   late final MetricsService _metricsService;
-  late final CalculateRoomPriceUseCase _calculateRoomPriceUseCase;
+  late final WebSocketService _webSocketService;
 
   DateTime? _paymentDateTime;
+  bool _isBedSelectionView = false; // Флаг для управления видимостью клавиатуры
 
   @override
   void initState() {
     super.initState();
 
-    // Инициализация менеджеров
     _keyboardManager = KeyboardManager();
-    _roomInputManager = RoomInputManager();
     _metricsService = MetricsService();
-    _calculateRoomPriceUseCase = CalculateRoomPriceUseCase();
+    _webSocketService = WebSocketService();
 
     _inactivityManager = InactivityManager(
       onTimeout: () {
-        if (mounted) Navigator.of(context).pop();
+        if (mounted) {
+          Timer? dialogTimer;
+          showCupertinoDialog(
+            context: context,
+            builder: (ctx) {
+              dialogTimer = Timer(const Duration(seconds: 60), () {
+                if (mounted) {
+                  Navigator.of(ctx).pop(); // Dismiss the dialog
+                  Navigator.of(context).pushAndRemoveUntil(
+                    CupertinoPageRoute(builder: (context) => LockScreen()),
+                    (route) => false,
+                  );
+                }
+              });
+              return CupertinoAlertDialog(
+                title: const Text('Вы еще здесь?'),
+                content: const Text('Если вы не ответите, сессия будет завершена.'),
+                actions: [
+                  CupertinoDialogAction(
+                    onPressed: () {
+                      dialogTimer?.cancel();
+                      Navigator.of(ctx).pop();
+                      _inactivityManager.reset(); // Reset the main inactivity timer
+                    },
+                    child: const Text('Да'),
+                  ),
+                ],
+              );
+            },
+          ).then((_) {
+            dialogTimer?.cancel(); // Ensure dialog timer is cancelled if dialog is dismissed by other means
+          });
+        }
       },
     );
 
-    // Настройка клавиатуры
-    _keyboardManager.initializeFocusListeners(setState);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _keyboardManager.registerFields();
-      final cubit = context.read<BookingCubit>();
-      if (cubit.state.currentStep == BookingStep.guestInfo) {
-        _keyboardManager.focusFirstField();
-      }
-    });
+    _keyboardManager.initializeGuestFocusListeners(setState);
 
     _inactivityManager.start();
     _metricsService.startPaymentScenario();
@@ -92,90 +114,71 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
   void dispose() {
     _keyboardManager.dispose();
     _inactivityManager.dispose();
+    _webSocketService.disconnect();
     super.dispose();
   }
 
-  void _onNumpadKeyPressed(String key) {
-    final cubit = context.read<BookingCubit>();
-    setState(() {
-      _roomInputManager.handleKeyPress(key);
-      final room = _roomInputManager.createRoom(cubit.state.bookingData.selectedBuilding);
-      cubit.setRoom(room);
-    });
+  void _onStepChanged(BookingStep newStep) {
+    // Сбрасываем флаг при переходе на любой другой шаг
+    if (newStep != BookingStep.roomSelection) {
+      setState(() {
+        _isBedSelectionView = false;
+      });
+    }
+
+    if (newStep == BookingStep.guestInfo) {
+      _keyboardManager.registerFields(controllers: [
+        _keyboardManager.lastNameController,
+        _keyboardManager.firstNameController,
+        _keyboardManager.middleNameController,
+        _keyboardManager.phoneNumberController,
+      ], focusNodes: [
+        _keyboardManager.lastNameFocusNode,
+        _keyboardManager.firstNameFocusNode,
+        _keyboardManager.middleNameFocusNode,
+        _keyboardManager.phoneNumberFocusNode,
+      ]);
+      _keyboardManager.focusFirstField();
+    } else if (newStep == BookingStep.roomSelection) {
+      _keyboardManager.registerFields(controllers: [
+        _keyboardManager.roomSearchController,
+      ], focusNodes: [
+        _keyboardManager.roomSearchFocusNode,
+      ]);
+      _keyboardManager.roomSearchFocusNode.requestFocus();
+    } else if (newStep == BookingStep.itemSelection) {
+      _keyboardManager.registerFields(controllers: [
+        _keyboardManager.itemSearchController,
+      ], focusNodes: [
+        _keyboardManager.itemSearchFocusNode,
+      ]);
+      _keyboardManager.itemSearchFocusNode.requestFocus();
+    }
   }
 
   Future<void> _nextStep() async {
     final cubit = context.read<BookingCubit>();
-    final state = cubit.state;
-
-    // Расчет цены проживания при переходе с шага периода
-    if (state.currentStep == BookingStep.period &&
-        state.bookingData.selectedCategory == BookingCategory.accommodation &&
-        state.bookingData.selectedRoom != null &&
-        state.bookingData.selectedBuilding != null) {
-      await _calculateRoomPrice(cubit);
-    }
-
     cubit.nextStep();
-
-    if (cubit.state.currentStep == BookingStep.guestInfo) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _keyboardManager.focusFirstField();
-      });
-    }
-  }
-
-  Future<void> _calculateRoomPrice(BookingCubit cubit) async {
-    try {
-      showCupertinoDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CupertinoActivityIndicator(radius: 20),
-        ),
-      );
-
-      final roomType = _roomInputManager.selectedRoomType?.toApiString() ?? 'all';
-      final buildingId = int.tryParse(cubit.state.bookingData.selectedBuilding!.id) ?? 0;
-      final countDays = cubit.state.bookingData.totalNights;
-
-      final price = await _calculateRoomPriceUseCase(
-        roomType: roomType,
-        roomBuilding: buildingId,
-        countDays: countDays,
-      );
-
-      cubit.setCalculatedRoomPrice(price);
-
-      if (mounted) Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        _showErrorDialog('Не удалось рассчитать цену проживания.\n\n$e');
-      }
-    }
   }
 
   void _previousStep() {
     final cubit = context.read<BookingCubit>();
-
-    if (cubit.state.currentStep == BookingStep.guestInfo) {
-      _roomInputManager.reset();
-    }
-
     cubit.previousStep();
-
-    if (cubit.state.currentStep == BookingStep.guestInfo) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _keyboardManager.focusFirstField();
-      });
-    }
   }
 
   void _onBookingSuccess() {
+    print('DEBUG: _onBookingSuccess called');
+    _inactivityManager.start(); // Включаем обратно режим бездействия
     _paymentDateTime = DateTime.now();
     _metricsService.recordSuccessfulPayment();
     context.read<BookingCubit>().markBookingSuccessful();
+    print('DEBUG: markBookingSuccessful called');
+  }
+
+  void _onPaymentError() {
+    print('DEBUG: _onPaymentError called');
+    _inactivityManager.start(); // Включаем обратно режим бездействия
+    context.read<BookingCubit>().setPaymentError();
   }
 
   void _onBookingError(String message) {
@@ -201,104 +204,111 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<BookingCubit, BookingState>(
-      builder: (context, state) {
-        final showBottomBar = state.currentStep != BookingStep.confirmation &&
-            state.currentStep != BookingStep.paymentExecution &&
-            state.currentStep != BookingStep.success;
+    return BlocListener<BookingCubit, BookingState>(
+      listener: (context, state) {
+        _onStepChanged(state.currentStep);
+      },
+      listenWhen: (previous, current) => previous.currentStepIndex != current.currentStepIndex,
+      child: BlocBuilder<BookingCubit, BookingState>(
+        builder: (context, state) {
+          final currentStep = state.currentStep;
+          final showBottomBar = currentStep != BookingStep.confirmation &&
+              currentStep != BookingStep.paymentExecution &&
+              currentStep != BookingStep.success &&
+              currentStep != BookingStep.paymentError;
 
-        final showSidebar = state.currentStep != BookingStep.paymentExecution &&
-            state.currentStep != BookingStep.success;
+          final showSidebar = currentStep != BookingStep.paymentExecution &&
+              currentStep != BookingStep.success &&
+              currentStep != BookingStep.paymentError;
 
-        final showGuestKeyboard = state.currentStep == BookingStep.guestInfo;
-        final showNumpad = state.currentStep == BookingStep.roomSelection;
-        final showKeyboard = showGuestKeyboard || showNumpad;
+          final isRoomNumberSelection = currentStep == BookingStep.roomSelection && !_isBedSelectionView;
+          final showKeyboard = currentStep == BookingStep.guestInfo ||
+              isRoomNumberSelection ||
+              currentStep == BookingStep.itemSelection;
 
-        return ChangeNotifierProvider.value(
-          value: _keyboardManager.keyboardNotifier,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: _inactivityManager.reset,
-            onPanDown: (_) => _inactivityManager.reset(),
-            child: CupertinoPageScaffold(
-              backgroundColor: const Color(0xFF000000),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: Center(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 500),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 400),
-                                    switchInCurve: Curves.easeInOut,
-                                    switchOutCurve: Curves.easeInOut,
-                                    transitionBuilder: (child, animation) {
-                                      final offsetAnimation = Tween<Offset>(
-                                        begin: const Offset(0.1, 0.0),
-                                        end: Offset.zero,
-                                      ).animate(CurvedAnimation(
-                                        parent: animation,
-                                        curve: Curves.easeOutCubic,
-                                      ));
-                                      return SlideTransition(
-                                        position: offsetAnimation,
-                                        child: FadeTransition(
-                                          opacity: animation,
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                    child: _buildCurrentStepWidget(state),
-                                  ),
-                                  if (showBottomBar) ...[
-                                    const SizedBox(height: 40),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                                      child: _buildBottomButton(context),
+          return ChangeNotifierProvider.value(
+            value: _keyboardManager.keyboardNotifier,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _inactivityManager.reset,
+              onPanDown: (_) => _inactivityManager.reset(),
+              child: CupertinoPageScaffold(
+                backgroundColor: const Color(0xFF000000),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 500),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 400),
+                                      switchInCurve: Curves.easeInOut,
+                                      switchOutCurve: Curves.easeInOut,
+                                      transitionBuilder: (child, animation) {
+                                        final offsetAnimation = Tween<Offset>(
+                                          begin: const Offset(0.1, 0.0),
+                                          end: Offset.zero,
+                                        ).animate(CurvedAnimation(
+                                          parent: animation,
+                                          curve: Curves.easeOutCubic,
+                                        ));
+                                        return SlideTransition(
+                                          position: offsetAnimation,
+                                          child: FadeTransition(
+                                            opacity: animation,
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                      child: _buildCurrentStepWidget(state),
                                     ),
+                                    if (showBottomBar) ...[
+                                      const SizedBox(height: 40),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                                        child: _buildBottomButton(context),
+                                      ),
+                                    ],
                                   ],
-                                ],
+                                ),
                               ),
-                            ),
-                            if (showSidebar) ...[
-                              const SizedBox(width: 24),
-                              _buildSidebar(state),
+                              if (showSidebar) ...[
+                                const SizedBox(width: 24),
+                                _buildSidebar(state),
+                              ],
                             ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (showKeyboard)
-                      Center(
-                        child: SizedBox(
-                          width: showNumpad ? 400 : 1200,
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 20.0, left: 20.0, right: 20.0),
-                            child: showNumpad
-                                ? NumpadKeyboard(onKeyPressed: _onNumpadKeyPressed)
-                                : CustomKeyboard(
-                              onKeyPressed: _keyboardManager.keyboardNotifier.onKeyPressed,
-                              showNumbers: !showGuestKeyboard,
-                            ),
                           ),
                         ),
                       ),
-                  ],
+                      if (showKeyboard)
+                        Center(
+                          child: SizedBox(
+                            width: 1200,
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 20.0, left: 20.0, right: 20.0),
+                                                                                            child: CustomKeyboard(
+                                                                                              onKeyPressed: _keyboardManager.keyboardNotifier.onKeyPressed,
+                                                                                              numpadOnly: currentStep == BookingStep.roomSelection,
+                                                                                            ),                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -403,34 +413,39 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
           selectedBuilding: state.bookingData.selectedBuilding,
           onBuildingSelected: cubit.setBuilding,
         );
+      case BookingStep.roomTypeSelection:
+        return const StepRoomTypeSelection(
+          key: ValueKey('room_type'),
+        );
       case BookingStep.roomSelection:
         return StepRoomSelection(
           key: const ValueKey('room'),
-          roomNumber: _roomInputManager.roomNumberInput,
           selectedBuilding: state.bookingData.selectedBuilding,
-          selectedRoomType: _roomInputManager.selectedRoomType,
-          onRoomTypeSelected: (type) {
+          searchController: _keyboardManager.roomSearchController,
+          searchFocusNode: _keyboardManager.roomSearchFocusNode,
+          onViewChange: (isBedView) {
             setState(() {
-              _roomInputManager.setRoomType(type);
-              cubit.setRoomType(type);
+              _isBedSelectionView = isBedView;
             });
           },
         );
       case BookingStep.guestInfo:
         return StepGuestInfo(
           key: const ValueKey('guest'),
-          onChanged: (first, last, middle) => cubit.setGuestData(
+          onChanged: (first, last, middle, phone) => cubit.setGuestData(
             firstName: first,
             lastName: last,
             middleName: middle,
+            phoneNumber: phone,
           ),
           lastNameController: _keyboardManager.lastNameController,
           firstNameController: _keyboardManager.firstNameController,
           middleNameController: _keyboardManager.middleNameController,
+          phoneNumberController: _keyboardManager.phoneNumberController,
           lastNameFocusNode: _keyboardManager.lastNameFocusNode,
           firstNameFocusNode: _keyboardManager.firstNameFocusNode,
           middleNameFocusNode: _keyboardManager.middleNameFocusNode,
-          focusedFieldIndex: _keyboardManager.focusedFieldIndex,
+          phoneNumberFocusNode: _keyboardManager.phoneNumberFocusNode,
         );
       case BookingStep.categorySelection:
         return StepCategorySelection(
@@ -451,6 +466,8 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
           category: state.bookingData.selectedCategory,
           selectedItems: state.bookingData.selectedItems,
           onItemsChanged: cubit.setSelectedItems,
+          searchController: _keyboardManager.itemSearchController,
+          searchFocusNode: _keyboardManager.itemSearchFocusNode,
         );
       case BookingStep.payment:
         return StepPayment(
@@ -467,12 +484,19 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
           onError: _onBookingError,
         );
       case BookingStep.paymentExecution:
+        // Отключаем режим бездействия во время оплаты
+        _inactivityManager.stop();
         return StepPaymentExecution(
           key: const ValueKey('payment_execution'),
+          data: state.bookingData.data,
           paymentMethod: state.bookingData.paymentMethod ?? 'СБП',
           totalPrice: state.bookingData.totalPrice,
+          webSocketService: _webSocketService,
           onPaymentComplete: _onBookingSuccess,
+          onPaymentError: _onPaymentError,
           onPaymentTimeout: () {
+            _inactivityManager.start(); // Включаем обратно режим бездействия
+            _webSocketService.disconnect();
             showCupertinoDialog(
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
@@ -483,9 +507,7 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
                     isDefaultAction: true,
                     onPressed: () {
                       Navigator.of(ctx).pop();
-                      // Возвращаемся к шагу оплаты
                       final newIndex = state.steps.indexOf(BookingStep.payment);
-                      // Нужно вручную установить индекс
                       while (cubit.state.currentStepIndex > newIndex) {
                         cubit.previousStep();
                       }
@@ -497,7 +519,18 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
             );
           },
         );
+      case BookingStep.paymentError:
+        return StepPaymentError(
+          key: const ValueKey('payment_error'),
+          onRetry: () {
+            final newIndex = state.steps.indexOf(BookingStep.payment);
+            while (cubit.state.currentStepIndex > newIndex) {
+              cubit.previousStep();
+            }
+          },
+        );
       case BookingStep.success:
+        _webSocketService.disconnect();
         return StepSuccess(
           key: const ValueKey('success'),
           totalPrice: state.bookingData.totalPrice,

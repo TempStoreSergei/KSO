@@ -3,26 +3,29 @@
 // ============================================
 
 import 'package:motel/domain/models/booking_models.dart';
+import 'package:motel/data/models/room_model.dart';
 
-/// Состояние процесса бронирования
+enum BookingStatus { initial, loading, success, failure, paymentError }
+
 class BookingState {
   final BookingDataState bookingData;
   final int currentStepIndex;
-  final bool isBookingSuccessful;
+  final BookingStatus status;
+  final Map<String, List<Room>> rooms;
 
   BookingState({
     BookingDataState? bookingData,
     this.currentStepIndex = 0,
-    this.isBookingSuccessful = false,
+    this.status = BookingStatus.initial,
+    this.rooms = const {},
   }) : bookingData = bookingData ?? BookingDataState();
 
-  /// Текущий шаг бронирования
   BookingStep get currentStep => steps[currentStepIndex];
 
-  /// Список шагов с учетом выбранной категории
   List<BookingStep> get steps {
     final stepList = [
       BookingStep.buildingSelection,
+      BookingStep.roomTypeSelection,
       BookingStep.roomSelection,
       BookingStep.guestInfo,
       BookingStep.categorySelection,
@@ -36,23 +39,32 @@ class BookingState {
       stepList.add(BookingStep.itemSelection);
     }
 
-    stepList.addAll([BookingStep.payment, BookingStep.confirmation, BookingStep.paymentExecution]);
+    stepList.addAll([
+      BookingStep.payment,
+      BookingStep.confirmation,
+      BookingStep.paymentExecution
+    ]);
 
-    if (isBookingSuccessful) {
+    if (status == BookingStatus.success) {
       stepList.add(BookingStep.success);
+    } else if (status == BookingStatus.paymentError) {
+      stepList.add(BookingStep.paymentError);
     }
+
     return stepList;
   }
 
   BookingState copyWith({
     BookingDataState? bookingData,
     int? currentStepIndex,
-    bool? isBookingSuccessful,
+    BookingStatus? status,
+    Map<String, List<Room>>? rooms,
   }) {
     return BookingState(
       bookingData: bookingData ?? this.bookingData,
       currentStepIndex: currentStepIndex ?? this.currentStepIndex,
-      isBookingSuccessful: isBookingSuccessful ?? this.isBookingSuccessful,
+      status: status ?? this.status,
+      rooms: rooms ?? this.rooms,
     );
   }
 }
@@ -64,14 +76,16 @@ class BookingDataState {
   BookingDataState([BookingData? data]) : _data = data ?? BookingData();
 
   Building? get selectedBuilding => _data.selectedBuilding;
+  RoomType? get selectedRoomType => _data.selectedRoomType;
   Room? get selectedRoom => _data.selectedRoom;
   BookingCategory get selectedCategory => _data.selectedCategory;
   List<BookingItem> get selectedItems => _data.selectedItems;
-  DateTime get checkInDate => _data.checkInDate;
-  DateTime get checkOutDate => _data.checkOutDate;
+  DateTime? get checkInDate => _data.checkInDate;
+  DateTime? get checkOutDate => _data.checkOutDate;
   String? get lastName => _data.lastName;
   String? get firstName => _data.firstName;
   String? get middleName => _data.middleName;
+  String? get phoneNumber => _data.phoneNumber;
   String? get paymentMethod => _data.paymentMethod;
   int? get calculatedRoomPrice => _data.calculatedRoomPrice;
 
@@ -82,6 +96,7 @@ class BookingDataState {
 
   BookingDataState copyWith({
     Building? selectedBuilding,
+    RoomType? selectedRoomType,
     Room? selectedRoom,
     BookingCategory? selectedCategory,
     List<BookingItem>? selectedItems,
@@ -90,12 +105,15 @@ class BookingDataState {
     String? lastName,
     String? firstName,
     String? middleName,
+    String? phoneNumber,
     String? paymentMethod,
     int? calculatedRoomPrice,
+    bool forceNullRoom = false,
   }) {
     final newData = BookingData()
       ..selectedBuilding = selectedBuilding ?? _data.selectedBuilding
-      ..selectedRoom = selectedRoom ?? _data.selectedRoom
+      ..selectedRoomType = selectedRoomType ?? _data.selectedRoomType
+      ..selectedRoom = forceNullRoom ? null : selectedRoom ?? _data.selectedRoom
       ..selectedCategory = selectedCategory ?? _data.selectedCategory
       ..selectedItems = selectedItems ?? List.from(_data.selectedItems)
       ..checkInDate = checkInDate ?? _data.checkInDate
@@ -103,6 +121,7 @@ class BookingDataState {
       ..lastName = lastName ?? _data.lastName
       ..firstName = firstName ?? _data.firstName
       ..middleName = middleName ?? _data.middleName
+      ..phoneNumber = phoneNumber ?? _data.phoneNumber
       ..paymentMethod = paymentMethod ?? _data.paymentMethod
       ..calculatedRoomPrice = calculatedRoomPrice ?? _data.calculatedRoomPrice;
 

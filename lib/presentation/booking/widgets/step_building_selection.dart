@@ -19,9 +19,9 @@ class StepBuildingSelection extends StatelessWidget {
 
   // Моковые данные корпусов
   List<Building> get _mockBuildings => [
-        Building(id: '1', name: 'Корпус А'),
-        Building(id: '2', name: 'Корпус Б'),
-        Building(id: '3', name: 'Корпус В'),
+        Building(id: '1', name: 'Корпус 1'),
+        Building(id: '2', name: 'Корпус 2'),
+        Building(id: '3', name: 'Корпус 3'),
       ];
 
   IconData _getBuildingIcon(String buildingId) {
@@ -47,19 +47,6 @@ class StepBuildingSelection extends StatelessWidget {
         return CupertinoColors.systemPurple;
       default:
         return CupertinoColors.systemGrey;
-    }
-  }
-
-  String _getBuildingDescription(String buildingId) {
-    switch (buildingId) {
-      case '1':
-        return 'Основной корпус';
-      case '2':
-        return 'Семейный корпус';
-      case '3':
-        return 'Премиум корпус';
-      default:
-        return '';
     }
   }
 
@@ -139,13 +126,6 @@ class StepBuildingSelection extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    _getBuildingDescription(building.id),
-                    style: const TextStyle(
-                      color: CupertinoColors.systemGrey2,
-                      fontSize: 13,
-                    ),
-                  ),
                 ],
               ),
             ),

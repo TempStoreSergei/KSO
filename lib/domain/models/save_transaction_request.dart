@@ -1,12 +1,8 @@
-// ============================================
-// lib/domain/models/save_transaction_request.dart
-// ============================================
-
-// Внутренняя модель для информации о госте
+// Модель для информации о госте
 class GuestInfoRequest {
   final String firstName;
   final String lastName;
-  final String surname; // Отчество
+  final String surname;
 
   GuestInfoRequest({
     required this.firstName,
@@ -14,63 +10,72 @@ class GuestInfoRequest {
     required this.surname,
   });
 
+  Map<String, dynamic> toJson() => {
+        'firstName': firstName,
+        'lastName': lastName,
+        'surname': surname,
+      };
+}
+
+// Модель для информации о комнате
+class RoomInfoRequest {
+  final String number;
+  final String type;
+  final int building;
+  final int? countDays;
+
+  RoomInfoRequest({
+    required this.number,
+    required this.type,
+    required this.building,
+    this.countDays,
+  });
+
   Map<String, dynamic> toJson() {
-    return {
-      'firstName': firstName,
-      'lastName': lastName,
-      'surname': surname,
+    final map = <String, dynamic>{
+      'number': number,
+      'type': type,
+      'building': building,
     };
+    // Не добавляем countDays, если он null или 0
+    if (countDays != null && countDays! > 0) {
+      map['countDays'] = countDays;
+    }
+    return map;
   }
 }
 
-// Основная модель для отправки на /guests/save_transaction
-// ВАЖНО: guest и room - обязательные поля
-// Должно быть либо services, либо fines (или оба)
+// Основная модель запроса
 class SaveTransactionRequest {
   final GuestInfoRequest guest;
-  final String room; // Номер комнаты (строка)
-  final List<int>? services; // Опциональный список ID услуг
-  final List<int>? fines; // Опциональный список ID штрафов
-  final String? checkIn; // Опционально для штрафов
-  final String? checkOut; // Опционально для штрафов
-  final String? paymentType; // Опционально
+  final RoomInfoRequest room;
+  final List<Map<String, int>>? services;
+  final List<Map<String, int>>? fines;
+  final int paymentSumm;
+  final String paymentType;
 
   SaveTransactionRequest({
     required this.guest,
     required this.room,
+    required this.paymentSumm,
+    required this.paymentType,
     this.services,
     this.fines,
-    this.checkIn,
-    this.checkOut,
-    this.paymentType,
-  }) : assert(
-          services != null || fines != null,
-          'Должен быть указан либо services, либо fines (или оба)',
-        );
+  });
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = {
+    final map = <String, dynamic>{
       'guest': guest.toJson(),
-      'room': room,
+      'room': room.toJson(),
+      'paymentSumm': paymentSumm,
+      'paymentType': paymentType,
     };
-
-    // Добавляем опциональные поля только если они не null
     if (services != null && services!.isNotEmpty) {
-      json['services'] = services;
+      map['services'] = services;
     }
     if (fines != null && fines!.isNotEmpty) {
-      json['fines'] = fines;
+      map['fines'] = fines;
     }
-    if (checkIn != null) {
-      json['checkIn'] = checkIn;
-    }
-    if (checkOut != null) {
-      json['checkOut'] = checkOut;
-    }
-    if (paymentType != null) {
-      json['paymentType'] = paymentType;
-    }
-
-    return json;
+    return map;
   }
 }

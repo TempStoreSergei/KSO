@@ -4,6 +4,8 @@
 
 import 'package:flutter/cupertino.dart';
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/constants/permissions_mapping.dart';
+import 'package:motel/core/services/permissions_service.dart';
 import 'package:motel/data/datasources/service_remote_data_source.dart';
 import 'package:motel/data/repositories/service_repository_impl.dart';
 import 'package:motel/domain/entities/service_entity.dart';
@@ -20,13 +22,28 @@ class ServicesSettingsScreen extends StatefulWidget {
 class _ServicesSettingsScreenState extends State<ServicesSettingsScreen> {
   final ServiceRepository _repository = ServiceRepositoryImpl(
       remoteDataSource: ServiceRemoteDataSourceImpl(apiClient: ApiClient.instance));
+  final PermissionsService _permissionsService = PermissionsService();
   List<ServiceEntity>? _services;
   bool _isLoading = false;
+  bool _canAddService = false;
+  bool _canUpdateService = false;
 
   @override
   void initState() {
     super.initState();
     _loadServices();
+    _loadPermissions();
+  }
+
+  Future<void> _loadPermissions() async {
+    final canAdd = await _permissionsService.hasPermission(PermissionsMapping.servicesAdd);
+    final canUpdate = await _permissionsService.hasPermission(PermissionsMapping.servicesUpdate);
+    if (mounted) {
+      setState(() {
+        _canAddService = canAdd;
+        _canUpdateService = canUpdate;
+      });
+    }
   }
 
   Future<void> _loadServices() async {
@@ -66,23 +83,24 @@ class _ServicesSettingsScreenState extends State<ServicesSettingsScreen> {
               _buildServiceList(),
 
               // Кнопка добавления услуги
-              SliverToBoxAdapter(
-                child: CupertinoListSection.insetGrouped(
-                  children: [
-                    CupertinoListTile(
-                      title: const Text(
-                        'Добавить услугу',
-                        style: TextStyle(color: CupertinoColors.activeBlue),
+              if (_canAddService)
+                SliverToBoxAdapter(
+                  child: CupertinoListSection.insetGrouped(
+                    children: [
+                      CupertinoListTile(
+                        title: const Text(
+                          'Добавить услугу',
+                          style: TextStyle(color: CupertinoColors.activeBlue),
+                        ),
+                        leading: const Icon(
+                          CupertinoIcons.add_circled_solid,
+                          color: CupertinoColors.activeBlue,
+                        ),
+                        onTap: () => _navigateAndReload(const ServiceEditScreen()),
                       ),
-                      leading: const Icon(
-                        CupertinoIcons.add_circled_solid,
-                        color: CupertinoColors.activeBlue,
-                      ),
-                      onTap: () => _navigateAndReload(const ServiceEditScreen()),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
           if (_isLoading && _services == null)
@@ -116,11 +134,11 @@ class _ServicesSettingsScreenState extends State<ServicesSettingsScreen> {
           return CupertinoListTile(
             title: Text(service.name),
             subtitle: Text(
-              '${service.price} ₽ | Налог: ${service.tax}%',
+              '${service.price ~/ 100} ₽ | Налог: ${service.tax}%',
               style: const TextStyle(color: CupertinoColors.systemGrey),
             ),
-            trailing: const CupertinoListTileChevron(),
-            onTap: () => _navigateAndReload(ServiceEditScreen(service: service)),
+            trailing: _canUpdateService ? const CupertinoListTileChevron() : null,
+            onTap: _canUpdateService ? () => _navigateAndReload(ServiceEditScreen(service: service)) : null,
           );
         }).toList(),
       ),

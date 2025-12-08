@@ -1,7 +1,3 @@
-// ============================================
-// lib/presentation/booking/widgets/step_item_selection.dart
-// ============================================
-
 import 'package:flutter/cupertino.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/data/datasources/service_remote_data_source.dart';
@@ -12,19 +8,21 @@ import 'package:motel/domain/models/fine_models.dart';
 import 'package:motel/domain/usecases/get_fines.dart';
 import 'package:motel/domain/usecases/get_services_usecase.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
-import 'package:motel/presentation/guest_info/keyboard_notifier.dart';
-import 'package:provider/provider.dart';
 
 class StepItemSelection extends StatefulWidget {
   final BookingCategory category;
   final List<BookingItem> selectedItems;
   final Function(List<BookingItem>) onItemsChanged;
+  final TextEditingController searchController;
+  final FocusNode searchFocusNode;
 
   const StepItemSelection({
     super.key,
     required this.category,
     required this.selectedItems,
     required this.onItemsChanged,
+    required this.searchController,
+    required this.searchFocusNode,
   });
 
   @override
@@ -32,36 +30,15 @@ class StepItemSelection extends StatefulWidget {
 }
 
 class _StepItemSelectionState extends State<StepItemSelection> {
-  late TextEditingController _searchController;
-  late FocusNode _searchFocusNode;
-  String _searchQuery = '';
   List<BookingItem> _items = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _searchController = TextEditingController();
-    _searchFocusNode = FocusNode();
-
-    // Регистрируем поле поиска в клавиатуре если это услуги или штрафы
-    if (_shouldShowSearch()) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final keyboardNotifier = context.read<KeyboardNotifier>();
-        keyboardNotifier.registerFields(
-          controllers: [_searchController],
-          focusNodes: [_searchFocusNode],
-        );
-      });
-    }
-
-    _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text.toLowerCase();
-      });
+    widget.searchController.addListener(() {
+      setState(() {}); // Rebuild on text change
     });
-
-    // Загружаем данные из API
     _loadItems();
   }
 
@@ -88,7 +65,6 @@ class _StepItemSelectionState extends State<StepItemSelection> {
     switch (widget.category) {
       case BookingCategory.services:
       case BookingCategory.accommodation:
-        // Загружаем услуги из API
         final repository = ServiceRepositoryImpl(
           remoteDataSource: ServiceRemoteDataSourceImpl(apiClient: apiClient),
         );
@@ -97,13 +73,11 @@ class _StepItemSelectionState extends State<StepItemSelection> {
         return services.map((service) => _serviceToBookingItem(service)).toList();
 
       case BookingCategory.ruleViolationPenalty:
-        // Загружаем штрафы за нарушение правил
         final getFinesUseCase = GetFinesUseCase(apiClient);
         final fines = await getFinesUseCase.getByType(FineType.violationRules);
         return fines.map((fine) => _fineToBookingItem(fine)).toList();
 
       case BookingCategory.propertyDamagePenalty:
-        // Загружаем штрафы за порчу имущества
         final getFinesUseCase = GetFinesUseCase(apiClient);
         final fines = await getFinesUseCase.getByType(FineType.damageToProperty);
         return fines.map((fine) => _fineToBookingItem(fine)).toList();
@@ -118,6 +92,7 @@ class _StepItemSelectionState extends State<StepItemSelection> {
       id: service.id.toString(),
       name: service.name,
       price: service.price,
+      tax: service.tax,
       category: widget.category,
       isCountable: service.isCountable,
       isDuration: service.isDuration,
@@ -129,17 +104,11 @@ class _StepItemSelectionState extends State<StepItemSelection> {
       id: fine.id.toString(),
       name: fine.name,
       price: fine.price,
+      tax: 0, // Штрафы без налога
       category: widget.category,
       isCountable: false,
       isDuration: false,
     );
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
   }
 
   bool _shouldShowSearch() {
@@ -164,10 +133,11 @@ class _StepItemSelectionState extends State<StepItemSelection> {
   }
 
   List<BookingItem> get _filteredItems {
-    if (_searchQuery.isEmpty) {
+    final searchQuery = widget.searchController.text.toLowerCase();
+    if (searchQuery.isEmpty) {
       return _items;
     }
-    return _items.where((item) => item.name.toLowerCase().contains(_searchQuery)).toList();
+    return _items.where((item) => item.name.toLowerCase().contains(searchQuery)).toList();
   }
 
   void _toggleItem(BookingItem item) {
@@ -234,113 +204,50 @@ class _StepItemSelectionState extends State<StepItemSelection> {
 
   Widget _buildSearchField() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
-      child: CupertinoTextField(
-        controller: _searchController,
-        focusNode: _searchFocusNode,
+      padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+      child: CupertinoSearchTextField(
+        controller: widget.searchController,
+        focusNode: widget.searchFocusNode,
         placeholder: 'Поиск...',
-        prefix: const Padding(
-          padding: EdgeInsets.only(left: 12.0),
-          child: Icon(CupertinoIcons.search, color: CupertinoColors.systemGrey, size: 18),
-        ),
-        clearButtonMode: OverlayVisibilityMode.editing,
-        style: const TextStyle(color: CupertinoColors.white, fontSize: 15),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
     );
   }
 
   IconData _getItemIcon(BookingItem item) {
-    // Иконки для услуг проживания
     if (widget.category == BookingCategory.accommodation) {
       switch (item.id) {
         case 'breakfast':
           return CupertinoIcons.cart_fill;
         case 'parking':
           return CupertinoIcons.car_fill;
-        case 'spa':
-          return CupertinoIcons.sparkles;
-        case 'gym':
-          return CupertinoIcons.flame_fill;
         default:
           return CupertinoIcons.checkmark_circle_fill;
       }
-    }
-    // Иконки для доп. услуг
-    else if (widget.category == BookingCategory.services) {
-      switch (item.id) {
-        case 'laundry':
-          return CupertinoIcons.archivebox_fill;
-        case 'room_service':
-          return CupertinoIcons.tray_fill;
-        case 'transfer':
-          return CupertinoIcons.car_fill;
-        case 'excursion':
-          return CupertinoIcons.map_fill;
-        case 'massage':
-          return CupertinoIcons.hand_raised_fill;
-        case 'sauna':
-          return CupertinoIcons.flame_fill;
-        default:
-          return CupertinoIcons.star_fill;
-      }
-    }
-    // Иконки для штрафов за нарушение правил
-    else if (widget.category == BookingCategory.ruleViolationPenalty) {
+    } else if (widget.category == BookingCategory.services) {
+      return CupertinoIcons.star_fill;
+    } else if (widget.category == BookingCategory.ruleViolationPenalty) {
       return CupertinoIcons.exclamationmark_triangle_fill;
-    }
-    // Иконки для штрафов за порчу имущества
-    else if (widget.category == BookingCategory.propertyDamagePenalty) {
+    } else if (widget.category == BookingCategory.propertyDamagePenalty) {
       return CupertinoIcons.exclamationmark_octagon_fill;
     }
     return CupertinoIcons.circle_fill;
   }
 
   Color _getItemIconColor(BookingItem item) {
-    // Цвета для услуг проживания
     if (widget.category == BookingCategory.accommodation) {
       switch (item.id) {
         case 'breakfast':
           return CupertinoColors.systemOrange;
         case 'parking':
           return CupertinoColors.systemBlue;
-        case 'spa':
-          return CupertinoColors.systemPurple;
-        case 'gym':
-          return CupertinoColors.systemRed;
         default:
           return CupertinoColors.systemGreen;
       }
-    }
-    // Цвета для доп. услуг
-    else if (widget.category == BookingCategory.services) {
-      switch (item.id) {
-        case 'laundry':
-          return CupertinoColors.systemTeal;
-        case 'room_service':
-          return CupertinoColors.systemIndigo;
-        case 'transfer':
-          return CupertinoColors.systemBlue;
-        case 'excursion':
-          return CupertinoColors.systemGreen;
-        case 'massage':
-          return CupertinoColors.systemPink;
-        case 'sauna':
-          return CupertinoColors.systemOrange;
-        default:
-          return CupertinoColors.systemYellow;
-      }
-    }
-    // Цвет для штрафов за нарушение правил
-    else if (widget.category == BookingCategory.ruleViolationPenalty) {
+    } else if (widget.category == BookingCategory.services) {
       return CupertinoColors.systemYellow;
-    }
-    // Цвет для штрафов за порчу имущества
-    else if (widget.category == BookingCategory.propertyDamagePenalty) {
+    } else if (widget.category == BookingCategory.ruleViolationPenalty) {
+      return CupertinoColors.systemYellow;
+    } else if (widget.category == BookingCategory.propertyDamagePenalty) {
       return CupertinoColors.systemRed;
     }
     return CupertinoColors.systemGrey;
@@ -373,12 +280,13 @@ class _StepItemSelectionState extends State<StepItemSelection> {
 
             return CupertinoListTile(
               title: Text(
-                item.name,
-                style: const TextStyle(
-                  color: CupertinoColors.white,
-                  fontSize: 16,
+                  item.name,
+                  style: const TextStyle(
+                    color: CupertinoColors.white,
+                    fontSize: 16,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
               subtitle: _buildSubtitle(item, selectedItem),
               leading: Container(
                 width: 34,
@@ -403,19 +311,13 @@ class _StepItemSelectionState extends State<StepItemSelection> {
   }
 
   Widget _buildSubtitle(BookingItem item, BookingItem selectedItem) {
-    String priceText = '${item.price} ₽';
+    String priceText = '${item.price ~/ 100} ₽';
 
     if (_isSelected(item)) {
       if (item.isCountable) {
-        priceText += ' × ${selectedItem.quantity} = ${selectedItem.totalPrice} ₽';
+        priceText += ' × ${selectedItem.quantity} = ${selectedItem.totalPrice ~/ 100} ₽';
       } else if (item.isDuration) {
-        priceText += ' × ${selectedItem.quantity} ${_getDaysText(selectedItem.quantity)} = ${selectedItem.totalPrice} ₽';
-      }
-    } else {
-      if (item.isCountable) {
-        priceText += ' (можно выбрать количество)';
-      } else if (item.isDuration) {
-        priceText += ' (можно выбрать дни)';
+        priceText += ' × ${selectedItem.quantity} ${_getDaysText(selectedItem.quantity)} = ${selectedItem.totalPrice ~/ 100} ₽';
       }
     }
 

@@ -6,14 +6,15 @@ import 'package:flutter/cupertino.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 
 class StepGuestInfo extends StatefulWidget {
-  final Function(String, String, String) onChanged;
+  final Function(String, String, String, String) onChanged;
   final TextEditingController lastNameController;
   final TextEditingController firstNameController;
   final TextEditingController middleNameController;
+  final TextEditingController phoneNumberController;
   final FocusNode lastNameFocusNode;
   final FocusNode firstNameFocusNode;
   final FocusNode middleNameFocusNode;
-  final int focusedFieldIndex;
+  final FocusNode phoneNumberFocusNode;
 
   const StepGuestInfo({
     super.key,
@@ -21,10 +22,11 @@ class StepGuestInfo extends StatefulWidget {
     required this.lastNameController,
     required this.firstNameController,
     required this.middleNameController,
+    required this.phoneNumberController,
     required this.lastNameFocusNode,
     required this.firstNameFocusNode,
     required this.middleNameFocusNode,
-    required this.focusedFieldIndex,
+    required this.phoneNumberFocusNode,
   });
 
   @override
@@ -38,6 +40,7 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
     widget.lastNameController.addListener(_onDataChanged);
     widget.firstNameController.addListener(_onDataChanged);
     widget.middleNameController.addListener(_onDataChanged);
+    widget.phoneNumberController.addListener(_onDataChanged);
   }
 
   void _onDataChanged() {
@@ -45,6 +48,7 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
       widget.firstNameController.text,
       widget.lastNameController.text,
       widget.middleNameController.text,
+      widget.phoneNumberController.text,
     );
   }
 
@@ -53,46 +57,10 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
     widget.lastNameController.removeListener(_onDataChanged);
     widget.firstNameController.removeListener(_onDataChanged);
     widget.middleNameController.removeListener(_onDataChanged);
+    widget.phoneNumberController.removeListener(_onDataChanged);
     super.dispose();
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String placeholder,
-    required FocusNode focusNode,
-    required bool isFocused,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: isFocused
-            ? Border.all(color: CupertinoColors.activeBlue, width: 2)
-            : null,
-      ),
-      child: CupertinoTextField(
-        controller: controller,
-        focusNode: focusNode,
-        placeholder: placeholder,
-        style: const TextStyle(color: CupertinoColors.white, fontSize: 16),
-        placeholderStyle: const TextStyle(color: CupertinoColors.systemGrey, fontSize: 16),
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        prefix: isFocused
-            ? const Padding(
-          padding: EdgeInsets.only(left: 12.0, right: 12.0),
-          child: Icon(
-            CupertinoIcons.minus_circle_fill,
-            color: CupertinoColors.white,
-            size: 24,
-          ),
-        )
-            : null,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,27 +68,62 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
       icon: CupertinoIcons.person_fill,
       title: 'Данные гостя',
       subtitle: 'Пожалуйста, укажите ФИО как в паспорте',
-      child: Column(
+      child: CupertinoListSection.insetGrouped(
+        backgroundColor: CupertinoColors.transparent,
+        margin: EdgeInsets.zero,
         children: [
-          _buildTextField(
-            controller: widget.lastNameController,
-            placeholder: 'Фамилия',
-            focusNode: widget.lastNameFocusNode,
-            isFocused: widget.focusedFieldIndex == 0,
+          CupertinoListTile(
+            title: const Text('Фамилия'),
+            additionalInfo: Expanded(
+              child: CupertinoTextField(
+                controller: widget.lastNameController,
+                focusNode: widget.lastNameFocusNode,
+                textAlign: TextAlign.end,
+                style: const TextStyle(color: CupertinoColors.systemGrey),
+                decoration: null,
+                placeholder: 'Фамилия',
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          _buildTextField(
-            controller: widget.firstNameController,
-            placeholder: 'Имя',
-            focusNode: widget.firstNameFocusNode,
-            isFocused: widget.focusedFieldIndex == 1,
+          CupertinoListTile(
+            title: const Text('Имя'),
+            additionalInfo: Expanded(
+              child: CupertinoTextField(
+                controller: widget.firstNameController,
+                focusNode: widget.firstNameFocusNode,
+                textAlign: TextAlign.end,
+                style: const TextStyle(color: CupertinoColors.systemGrey),
+                decoration: null,
+                placeholder: 'Имя',
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          _buildTextField(
-            controller: widget.middleNameController,
-            placeholder: 'Отчество (если есть)',
-            focusNode: widget.middleNameFocusNode,
-            isFocused: widget.focusedFieldIndex == 2,
+          CupertinoListTile(
+            title: const Text('Отчество'),
+            additionalInfo: Expanded(
+              child: CupertinoTextField(
+                controller: widget.middleNameController,
+                focusNode: widget.middleNameFocusNode,
+                textAlign: TextAlign.end,
+                style: const TextStyle(color: CupertinoColors.systemGrey),
+                decoration: null,
+                placeholder: 'если есть',
+              ),
+            ),
+          ),
+          CupertinoListTile(
+            title: const Text('Телефон'),
+            additionalInfo: Expanded(
+              child: CupertinoTextField(
+                controller: widget.phoneNumberController,
+                focusNode: widget.phoneNumberFocusNode,
+                textAlign: TextAlign.end,
+                style: const TextStyle(color: CupertinoColors.systemGrey),
+                decoration: null,
+                placeholder: '+7 999 000-00-00',
+                keyboardType: TextInputType.phone,
+              ),
+            ),
           ),
         ],
       ),

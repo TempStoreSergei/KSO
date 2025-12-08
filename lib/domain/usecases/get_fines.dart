@@ -13,7 +13,7 @@ class GetFinesUseCase {
   /// Получить все штрафы
   Future<List<Fine>> execute() async {
     try {
-      final response = await _apiClient.get('/guests/get_fines');
+      final response = await _apiClient.get('/fines/get_fines');
 
       if (response['fines'] == null) {
         return [];

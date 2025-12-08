@@ -79,6 +79,16 @@ class MetricsService {
     );
   }
 
+  /// Зафиксировать выбор корпуса
+  void recordBuildingSelection(String buildingId) {
+    print('[MetricsService] Building selected: $buildingId');
+  }
+
+  /// Зафиксировать выбор комнаты
+  void recordRoomSelection(String roomInfo) {
+    print('[MetricsService] Room selected: $roomInfo');
+  }
+
   /// Сбросить все метрики (для тестирования или сброса статистики)
   Future<void> resetMetrics() async {
     final prefs = await SharedPreferences.getInstance();

@@ -65,7 +65,7 @@ class ScreensaverSettings {
 }
 
 class LockScreen extends StatefulWidget {
-  const LockScreen({super.key});
+  LockScreen({super.key});
 
   @override
   State<LockScreen> createState() => _LockScreenState();

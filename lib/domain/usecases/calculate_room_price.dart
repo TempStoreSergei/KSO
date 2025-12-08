@@ -17,7 +17,7 @@ class CalculateRoomPriceUseCase {
   /// [countDays] - количество дней проживания
   ///
   /// Возвращает общую стоимость проживания
-  Future<int> call({
+  Future<int?> call({
     required String roomType,
     required int roomBuilding,
     required int countDays,

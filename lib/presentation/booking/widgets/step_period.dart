@@ -1,18 +1,19 @@
-// ============================================
-// lib/presentation/booking/widgets/step_period.dart
-// ============================================
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart'; // === ИСПРАВЛЕНИЕ #1: ПРАВИЛЬНЫЙ ИМПОРТ MATERIAL ===
+import 'package:flutter/material.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 
-// === ИЗМЕНЕНИЕ: Виджет преобразован в StatefulWidget для управления выбором диапазона ===
 class StepPeriod extends StatefulWidget {
-  final DateTime checkIn;
-  final DateTime checkOut;
-  final Function(DateTime, DateTime) onDatesChanged;
+  final DateTime? checkIn;
+  final DateTime? checkOut;
+  final Function(DateTime?, DateTime?) onDatesChanged;
 
-  const StepPeriod({super.key, required this.checkIn, required this.checkOut, required this.onDatesChanged});
+  const StepPeriod({
+    super.key,
+    required this.checkIn,
+    required this.checkOut,
+    required this.onDatesChanged,
+  });
 
   @override
   State<StepPeriod> createState() => _StepPeriodState();
@@ -28,7 +29,9 @@ class _StepPeriodState extends State<StepPeriod> {
     super.initState();
     _startDate = widget.checkIn;
     _endDate = widget.checkOut;
-    _displayMonth = DateTime(widget.checkIn.year, widget.checkIn.month);
+    // Если даты не заданы, показываем текущий месяц
+    final initialDate = widget.checkIn ?? DateTime.now();
+    _displayMonth = DateTime(initialDate.year, initialDate.month);
   }
 
   void _onDateSelected(DateTime day) {
@@ -46,11 +49,8 @@ class _StepPeriodState extends State<StepPeriod> {
       }
     });
 
-    if (_startDate != null && _endDate != null) {
-      widget.onDatesChanged(_startDate!, _endDate!);
-    } else if (_startDate != null && _endDate == null) {
-      widget.onDatesChanged(_startDate!, _startDate!.add(const Duration(days: 1)));
-    }
+    // Отправляем обновленные даты, даже если выбрана только одна
+    widget.onDatesChanged(_startDate, _endDate);
   }
 
   void _changeMonth(int increment) {
@@ -76,7 +76,6 @@ class _StepPeriodState extends State<StepPeriod> {
   }
 
   Widget _buildCalendar() {
-    // === ИСПРАВЛЕНИЕ #2: ИСПОЛЬЗУЕМ DateUtils ИЗ MATERIAL ===
     final daysInMonth = DateUtils.getDaysInMonth(_displayMonth.year, _displayMonth.month);
     final firstDayOfMonth = DateTime(_displayMonth.year, _displayMonth.month, 1);
     final startingWeekday = firstDayOfMonth.weekday;
@@ -105,8 +104,6 @@ class _StepPeriodState extends State<StepPeriod> {
 
               final dayNumber = index - startingWeekday + 2;
               final currentDate = DateTime(_displayMonth.year, _displayMonth.month, dayNumber);
-
-              // === ИСПРАВЛЕНИЕ #3: ИСПОЛЬЗУЕМ DateUtils ИЗ MATERIAL ===
               final isBeforeToday = currentDate.isBefore(DateUtils.dateOnly(DateTime.now()));
 
               return _buildDayCell(currentDate, isBeforeToday);
@@ -118,31 +115,45 @@ class _StepPeriodState extends State<StepPeriod> {
   }
 
   Widget _buildDayCell(DateTime day, bool isBeforeToday) {
-    // === ИСПРАВЛЕНИЕ #4: ИСПОЛЬЗУЕМ DateUtils ИЗ MATERIAL ===
     bool isStartDate = _startDate != null && DateUtils.isSameDay(day, _startDate);
     bool isEndDate = _endDate != null && DateUtils.isSameDay(day, _endDate);
     bool isInRange = _startDate != null && _endDate != null && day.isAfter(_startDate!) && day.isBefore(_endDate!);
 
-    BoxDecoration decoration;
     Color textColor = isBeforeToday ? CupertinoColors.systemGrey3 : CupertinoColors.white;
+    Color? backgroundColor;
+    BorderRadius? borderRadius;
 
-    if (isStartDate || isEndDate) {
-      decoration = BoxDecoration(color: CupertinoColors.activeBlue, shape: BoxShape.circle);
+    if (isStartDate && isEndDate) {
+      backgroundColor = CupertinoColors.activeBlue;
+      borderRadius = BorderRadius.circular(8);
+      textColor = CupertinoColors.white;
+    } else if (isStartDate) {
+      backgroundColor = CupertinoColors.activeBlue;
+      borderRadius = const BorderRadius.only(topLeft: Radius.circular(8), bottomLeft: Radius.circular(8));
+      textColor = CupertinoColors.white;
+    } else if (isEndDate) {
+      backgroundColor = CupertinoColors.activeBlue;
+      borderRadius = const BorderRadius.only(topRight: Radius.circular(8), bottomRight: Radius.circular(8));
       textColor = CupertinoColors.white;
     } else if (isInRange) {
-      decoration = BoxDecoration(color: CupertinoColors.activeBlue.withOpacity(0.3), shape: BoxShape.circle);
-    } else {
-      decoration = const BoxDecoration();
+      backgroundColor = CupertinoColors.activeBlue.withOpacity(0.3);
+      borderRadius = BorderRadius.zero;
     }
 
     return GestureDetector(
       onTap: isBeforeToday ? null : () => _onDateSelected(day),
       child: Container(
         alignment: Alignment.center,
-        decoration: decoration,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: backgroundColor != null
+            ? BoxDecoration(color: backgroundColor, borderRadius: borderRadius)
+            : null,
         child: Text(
           day.day.toString(),
-          style: TextStyle(color: textColor, fontWeight: isStartDate || isEndDate ? FontWeight.bold : FontWeight.normal),
+          style: TextStyle(
+            color: textColor,
+            fontWeight: isStartDate || isEndDate ? FontWeight.bold : FontWeight.normal,
+          ),
         ),
       ),
     );
@@ -158,8 +169,7 @@ class _StepPeriodState extends State<StepPeriod> {
           child: const Icon(CupertinoIcons.chevron_left, color: CupertinoColors.systemGrey),
         ),
         Text(
-          // === ИСПРАВЛЕНИЕ #5: ИСПОЛЬЗУЕМ MaterialLocalizations ИЗ MATERIAL ===
-          '${MaterialLocalizations.of(context).formatMonthYear(_displayMonth)}',
+          MaterialLocalizations.of(context).formatMonthYear(_displayMonth),
           style: const TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         CupertinoButton(

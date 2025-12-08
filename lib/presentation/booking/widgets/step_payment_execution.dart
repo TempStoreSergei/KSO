@@ -1,24 +1,31 @@
-// ============================================
-// lib/presentation/booking/widgets/step_payment_execution.dart
-// ============================================
-
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/websocket_service.dart';
+import 'package:motel/core/services/tax_settings_service.dart';
+import 'package:motel/domain/models/booking_models.dart';
+import 'package:motel/domain/usecases/save_transaction_usecase.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class StepPaymentExecution extends StatefulWidget {
+  final BookingData data;
   final String paymentMethod;
   final int totalPrice;
+  final WebSocketService webSocketService;
   final VoidCallback onPaymentComplete;
+  final VoidCallback onPaymentError;
   final VoidCallback onPaymentTimeout;
 
   const StepPaymentExecution({
     super.key,
+    required this.data,
     required this.paymentMethod,
     required this.totalPrice,
+    required this.webSocketService,
     required this.onPaymentComplete,
+    required this.onPaymentError,
     required this.onPaymentTimeout,
   });
 
@@ -30,14 +37,129 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   Timer? _paymentTimer;
   late int _remainingSeconds;
   late int _totalSeconds;
+  StreamSubscription? _socketSubscription;
+  int _collectedAmount = 0; // Собранная сумма в копейках
 
   @override
   void initState() {
     super.initState();
-    // Для наличных - 10 минут (600 секунд), для остальных - 2 минуты (120 секунд)
+    widget.webSocketService.connect();
     _totalSeconds = widget.paymentMethod == 'Наличные' ? 600 : 120;
     _remainingSeconds = _totalSeconds;
     _startPaymentTimer();
+    _listenToPaymentEvents();
+    _startPayment();
+  }
+
+  Future<void> _startPayment() async {
+    try {
+      if (widget.paymentMethod == 'Наличные') {
+        // Запускаем прием наличных
+        await ApiClient.instance.get(
+          '/cash_system/start_accepting_payment',
+          params: {'amount': widget.totalPrice},
+        );
+      } else if (widget.paymentMethod == 'Карта') {
+        // Запускаем оплату картой
+        await ApiClient.instance.get(
+          '/acquiring/start_payment',
+          params: {'amount': widget.totalPrice},
+        );
+      }
+    } catch (e) {
+      print('Ошибка запуска оплаты: $e');
+      widget.onPaymentError();
+    }
+  }
+
+  void _listenToPaymentEvents() {
+    _socketSubscription = widget.webSocketService.messageStream.listen((message) {
+      print('DEBUG: WebSocket message received: $message');
+      final eventType = message['event'];
+      final eventData = message['data'];
+
+      if (eventType == 'acceptedBill') {
+        print('DEBUG: acceptedBill event, collected_amount: ${eventData?['collected_amount']}');
+        // Обновление собранной суммы для наличных
+        if (mounted && eventData != null && eventData['collected_amount'] != null) {
+          setState(() {
+            _collectedAmount = eventData['collected_amount'] as int;
+          });
+        }
+      } else if (eventType == 'successPayment') {
+        print('DEBUG: successPayment event received');
+        _handleSuccessfulPayment();
+      } else if (eventType == 'errorPayment') {
+        print('DEBUG: errorPayment event received');
+        widget.onPaymentError();
+      }
+    });
+  }
+
+  Future<void> _handleSuccessfulPayment() async {
+    print('DEBUG: _handleSuccessfulPayment called');
+    try {
+      final isCheckPrinted = await _printCheck();
+      print('DEBUG: isCheckPrinted = $isCheckPrinted');
+      if (isCheckPrinted) {
+        final useCase = SaveTransactionUseCase(ApiClient.instance);
+        print('DEBUG: Calling SaveTransactionUseCase');
+        await useCase.call(widget.data);
+        print('DEBUG: Transaction saved, calling onPaymentComplete');
+        widget.onPaymentComplete();
+      } else {
+        print('DEBUG: Check printing failed');
+        widget.onPaymentError();
+      }
+    } catch (e) {
+      print('DEBUG: Error in _handleSuccessfulPayment: $e');
+      widget.onPaymentError();
+    }
+  }
+
+  Future<bool> _printCheck() async {
+    final items = widget.data.selectedItems.map((item) {
+      return {
+        "name": item.name,
+        "price": item.price,
+        "quantity": item.quantity,
+        "tax": item.tax,
+        "objectType": 4, // Всегда 4
+      };
+    }).toList();
+
+    // Если услуги не выбраны (пустой список), добавляем услугу по умолчанию
+    if (items.isEmpty && widget.data.selectedCategory == BookingCategory.accommodation) {
+      // Получаем налоговую ставку из настроек
+      final defaultTax = await TaxSettingsService.getDefaultAccommodationTax();
+
+      items.add({
+        "name": "Предоставление койко-мест для временного размещения",
+        "price": widget.totalPrice,
+        "quantity": 1,
+        "tax": defaultTax,
+        "objectType": 4,
+      });
+    }
+
+    final checkData = {
+      "items": items,
+      "paymentType": _getPaymentTypeCode(widget.paymentMethod),
+      "summ": widget.totalPrice,
+    };
+
+    return await ApiClient.instance.printCheck(checkData);
+  }
+
+  int _getPaymentTypeCode(String paymentMethod) {
+    switch (paymentMethod) {
+      case 'Карта':
+        return 1;
+      case 'Наличные':
+        return 0;
+      default:
+        return 1; // СБП or other
+    }
   }
 
   void _startPaymentTimer() {
@@ -56,6 +178,7 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   @override
   void dispose() {
     _paymentTimer?.cancel();
+    _socketSubscription?.cancel();
     super.dispose();
   }
 
@@ -108,22 +231,13 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     return StepContainer(
       icon: _getPaymentIcon(),
       title: _getPaymentTitle(),
-      subtitle: 'Сумма к оплате: ${widget.totalPrice} ₽',
+      subtitle: 'Сумма к оплате: ${widget.totalPrice ~/ 100} ₽',
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Таймер с прогресс-баром
           _buildTimerSection(),
-
           const SizedBox(height: 24),
-
-          // Контент в зависимости от типа оплаты
           _buildPaymentContent(),
-
-          const SizedBox(height: 24),
-
-          // Кнопка для симуляции успешной оплаты (в проде это уберется)
-          _buildTestPaymentButton(),
         ],
       ),
     );
@@ -190,7 +304,6 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   Widget _buildSBPContent() {
     return Column(
       children: [
-        // QR код
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -237,20 +350,6 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   Widget _buildCardContent() {
     return Column(
       children: [
-        // Анимированная иконка карты
-        Container(
-          width: 140,
-          height: 140,
-          decoration: BoxDecoration(
-            color: CupertinoColors.activeBlue.withValues(alpha: 0.2),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            CupertinoIcons.creditcard_fill,
-            color: CupertinoColors.activeBlue,
-            size: 70,
-          ),
-        ),
         const SizedBox(height: 32),
         const Text(
           'Приложите карту к терминалу',
@@ -275,9 +374,11 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   }
 
   Widget _buildCashContent() {
+    final remainingAmount = widget.totalPrice - _collectedAmount;
+    final changeAmount = _collectedAmount > widget.totalPrice ? _collectedAmount - widget.totalPrice : 0;
+
     return Column(
       children: [
-        // Анимированная иконка купюр
         Container(
           width: 140,
           height: 140,
@@ -301,16 +402,85 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 12),
-        Text(
-          '${widget.totalPrice} ₽',
-          style: const TextStyle(
-            color: CupertinoColors.systemGreen,
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
+        const SizedBox(height: 24),
+
+        // Собранная сумма
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Собрано:',
+                    style: TextStyle(
+                      color: CupertinoColors.systemGrey,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    '${_collectedAmount ~/ 100} ₽',
+                    style: const TextStyle(
+                      color: CupertinoColors.systemGreen,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Осталось:',
+                    style: TextStyle(
+                      color: CupertinoColors.systemGrey,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    '${remainingAmount > 0 ? remainingAmount ~/ 100 : 0} ₽',
+                    style: TextStyle(
+                      color: remainingAmount > 0 ? CupertinoColors.systemOrange : CupertinoColors.systemGreen,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              if (changeAmount > 0) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Сдача:',
+                      style: TextStyle(
+                        color: CupertinoColors.systemGrey,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      '${changeAmount ~/ 100} ₽',
+                      style: const TextStyle(
+                        color: CupertinoColors.activeBlue,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         const Text(
           'Вставляйте по одной купюре',
           style: TextStyle(
@@ -320,29 +490,6 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
           textAlign: TextAlign.center,
         ),
       ],
-    );
-  }
-
-  Widget _buildTestPaymentButton() {
-    return CupertinoButton(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-      color: CupertinoColors.systemGreen,
-      borderRadius: BorderRadius.circular(12),
-      onPressed: widget.onPaymentComplete,
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(CupertinoIcons.check_mark_circled_solid, color: CupertinoColors.white),
-          SizedBox(width: 8),
-          Text(
-            'Симулировать успешную оплату',
-            style: TextStyle(
-              color: CupertinoColors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

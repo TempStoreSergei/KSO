@@ -6,12 +6,12 @@ import 'keyboard_notifier.dart';
 
 class CustomKeyboard extends StatefulWidget {
   final Function(String) onKeyPressed;
-  final bool showNumbers; // Флаг для отображения цифр
+  final bool numpadOnly; // Флаг для отображения только цифровой клавиатуры
 
   const CustomKeyboard({
     super.key,
     required this.onKeyPressed,
-    this.showNumbers = true, // По умолчанию показываем цифры
+    this.numpadOnly = false,
   });
 
   @override
@@ -20,31 +20,44 @@ class CustomKeyboard extends StatefulWidget {
 
 class _CustomKeyboardState extends State<CustomKeyboard> {
   bool _isRussian = true; // true = русский, false = английский
+  bool _isNumberLayout = false; // true = цифровая раскладка
 
   @override
   Widget build(BuildContext context) {
-    // Ряд с цифрами (если showNumbers = true)
-    final List<String> numberRow = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+    final List<List<String>> keys;
 
-    // Русская раскладка
-    List<List<String>> russianKeys = [
-      if (widget.showNumbers) numberRow,
-      ['й', 'ц', 'у', 'к', 'е', 'н', 'г', 'ш', 'щ', 'з', 'х', 'ъ'],
-      ['ф', 'ы', 'в', 'а', 'п', 'р', 'о', 'л', 'д', 'ж', 'э'],
-      ['SHIFT', 'я', 'ч', 'с', 'м', 'и', 'т', 'ь', 'б', 'ю', 'BACKSPACE'],
-      ['TAB', 'SPACE', 'LANG'],
-    ];
-
-    // Английская раскладка
-    List<List<String>> englishKeys = [
-      if (widget.showNumbers) numberRow,
-      ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-      ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-      ['SHIFT', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'BACKSPACE'],
-      ['TAB', 'SPACE', 'LANG'],
-    ];
-
-    final keys = _isRussian ? russianKeys : englishKeys;
+    if (widget.numpadOnly) {
+      // Раскладка только для цифровой клавиатуры (numpad)
+      keys = [
+        ['1', '2', '3'],
+        ['4', '5', '6'],
+        ['7', '8', '9'],
+        ['', '0', 'BACKSPACE'],
+      ];
+    } else if (_isNumberLayout) {
+      // Цифровая раскладка
+      keys = [
+        ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+        ['-', '/', ':', ';', '(', ')', '₽', '&', '@', '"'],
+        ['SHIFT', '.', ',', '?', '!', '\'', 'BACKSPACE'],
+        ['ABC', 'SPACE'],
+      ];
+    } else {
+      // Буквенные раскладки (без цифр)
+      List<List<String>> russianKeys = [
+        ['й', 'ц', 'у', 'к', 'е', 'н', 'г', 'ш', 'щ', 'з', 'х', 'ъ'],
+        ['ф', 'ы', 'в', 'а', 'п', 'р', 'о', 'л', 'д', 'ж', 'э'],
+        ['SHIFT', 'я', 'ч', 'с', 'м', 'и', 'т', 'ь', 'б', 'ю', 'BACKSPACE'],
+        ['123', 'SPACE', 'LANG'],
+      ];
+      List<List<String>> englishKeys = [
+        ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+        ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+        ['SHIFT', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'BACKSPACE'],
+        ['123', 'SPACE', 'LANG'],
+      ];
+      keys = _isRussian ? russianKeys : englishKeys;
+    }
 
     return Consumer<KeyboardNotifier>(
       builder: (context, notifier, child) {
@@ -55,23 +68,23 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 12.0),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
+                color: Colors.black.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(24.0),
               ),
               child: Column(
                 children: keys.asMap().entries.map((entry) {
-                  int rowIndex = entry.key;
                   List<String> row = entry.value;
+                  bool isNumpadLayout = widget.numpadOnly;
 
                   return Padding(
                     padding: EdgeInsets.only(
-                      left: (row.contains('ф') || row.contains('SHIFT') || row.contains('a')) ? 36.0 : 0.0,
+                      left: !isNumpadLayout && !_isNumberLayout && (row.contains('ф') || row.contains('SHIFT') || row.contains('a')) ? 36.0 : 0.0,
                       bottom: 12.0,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: row.map((key) {
-                        return _buildKey(context, key, notifier.isShiftEnabled);
+                        return _buildKey(context, key, notifier.isShiftEnabled, isNumpadLayout);
                       }).toList(),
                     ),
                   );
@@ -84,15 +97,20 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
     );
   }
 
-  Widget _buildKey(BuildContext context, String key, bool isShiftEnabled) {
-    final bool isLetterKey = key.length == 1 && !_isDigit(key);
+  Widget _buildKey(BuildContext context, String key, bool isShiftEnabled, bool isNumpad) {
+    if (key == '') {
+      return Container(width: 84, height: 60, margin: const EdgeInsets.all(6.0));
+    }
+
+    final bool isLetterKey = !isNumpad && !_isNumberLayout && key.length == 1 && !_isDigit(key);
     final bool isDigitKey = _isDigit(key);
     final bool isSpaceKey = key == 'SPACE';
-    final bool isTabOrLangKey = key == 'TAB' || key == 'LANG';
+    final bool isTabOrLangKey = key == 'LANG' || key == '123' || key == 'ABC';
+    // final bool isSpecialFunctionKey = key == 'SHIFT' || key == 'BACKSPACE';
 
-    final Color letterKeyColor = Colors.white.withOpacity(0.35);
-    final Color digitKeyColor = Colors.white.withOpacity(0.25);
-    final Color specialKeyColor = Colors.black.withOpacity(0.25);
+    final Color letterKeyColor = Colors.white.withValues(alpha: 0.35);
+    final Color digitKeyColor = Colors.white.withValues(alpha: 0.25);
+    final Color specialKeyColor = Colors.black.withValues(alpha: 0.25);
 
     Widget keyChild;
     switch (key) {
@@ -105,8 +123,11 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
       case 'SPACE':
         keyChild = const SizedBox();
         break;
-      case 'TAB':
-        keyChild = const Icon(CupertinoIcons.arrow_right_to_line, color: Colors.white, size: 28);
+      case '123':
+        keyChild = const Text('123', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold));
+        break;
+      case 'ABC':
+        keyChild = const Text('ABC', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold));
         break;
       case 'LANG':
         keyChild = Text(
@@ -115,20 +136,29 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
         );
         break;
       default:
-        // Применяем Shift для букв
-        final text = isShiftEnabled && !isDigitKey ? key.toUpperCase() : key.toLowerCase();
+        final text = isShiftEnabled && isLetterKey ? key.toUpperCase() : key;
         keyChild = Text(text, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w400));
     }
 
     double keyWidth;
-    if (isSpaceKey) keyWidth = 250.0;
-    else if (isTabOrLangKey) keyWidth = 84.0;
-    else keyWidth = 60.0;
+    if (isSpaceKey) {
+      keyWidth = 250.0;
+    } else if (isTabOrLangKey) {
+      keyWidth = 84.0;
+    } else if (isNumpad) {
+      keyWidth = 84.0;
+    } else {
+      keyWidth = 60.0;
+    }
 
     Color keyColor;
-    if (isLetterKey) keyColor = letterKeyColor;
-    else if (isDigitKey) keyColor = digitKeyColor;
-    else keyColor = specialKeyColor;
+    if (isLetterKey) {
+      keyColor = letterKeyColor;
+    } else if (isDigitKey || _isNumberLayout || isSpaceKey) {
+      keyColor = digitKeyColor;  // Пробел теперь использует цвет цифровой раскладки
+    } else {
+      keyColor = specialKeyColor;
+    }
 
     return Container(
       width: keyWidth,
@@ -136,19 +166,27 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
       margin: const EdgeInsets.all(6.0),
       decoration: BoxDecoration(
         color: keyColor,
-        shape: (isLetterKey || isDigitKey) ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: (isLetterKey || isDigitKey) ? null : const BorderRadius.all(Radius.circular(50)),
+        shape: (isLetterKey || (isDigitKey && !_isNumberLayout)) ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: (isLetterKey || (isDigitKey && !_isNumberLayout)) ? null : const BorderRadius.all(Radius.circular(50)),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          highlightColor: Colors.white.withOpacity(0.2),
+          highlightColor: Colors.white.withValues(alpha: 0.2),
           splashColor: Colors.transparent,
-          borderRadius: BorderRadius.circular((isLetterKey || isDigitKey) ? 30 : 50),
+          borderRadius: BorderRadius.circular((isLetterKey || (isDigitKey && !_isNumberLayout)) ? 30 : 50),
           onTap: () {
             if (key == 'LANG') {
               setState(() {
                 _isRussian = !_isRussian;
+              });
+            } else if (key == '123') {
+              setState(() {
+                _isNumberLayout = true;
+              });
+            } else if (key == 'ABC') {
+              setState(() {
+                _isNumberLayout = false;
               });
             } else {
               widget.onKeyPressed(key);

@@ -4,6 +4,8 @@
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:motel/core/constants/permissions_mapping.dart';
+import 'package:motel/presentation/widgets/permission_widget.dart';
 import 'package:motel/presentation/settings/bill_acceptor/cubit/bill_acceptor_cubit.dart';
 import 'package:motel/presentation/settings/bill_acceptor/cubit/bill_acceptor_state.dart';
 import 'package:motel/presentation/settings/bill_acceptor/widgets/actions_section.dart';
@@ -56,40 +58,49 @@ class _BillAcceptorSettingsView extends StatelessWidget {
               else if (state is BillAcceptorLoaded)
                 SliverMainAxisGroup(
                   slivers: [
-                    // Текущее состояние
+                    // Текущее состояние (доступно всем)
                     SliverToBoxAdapter(
                       child: StatusSection(status: state.status),
                     ),
 
                     // Настройки лимита
                     SliverToBoxAdapter(
-                      child: LimitSection(
-                        customMaxCount: state.customMaxCount,
+                      child: PermissionWidget(
+                        permission: PermissionsMapping.billAcceptorSetLimit,
+                        child: LimitSection(
+                          customMaxCount: state.customMaxCount,
+                        ),
                       ),
                     ),
 
                     // Тестирование
                     SliverToBoxAdapter(
-                      child: TestSection(
-                        testAmount: state.testAmount,
-                        testingStatus: state.testingStatus,
-                        collectedAmount: state.collectedAmount,
-                        events: state.events,
-                        onStartTest: () {
-                          context.read<BillAcceptorCubit>().startTest(
-                                state.testAmount,
-                              );
-                        },
-                        onStopTest: () {
-                          context.read<BillAcceptorCubit>().stopTest();
-                        },
+                      child: PermissionWidget(
+                        permission: PermissionsMapping.billAcceptorTest,
+                        child: TestSection(
+                          testAmount: state.testAmount,
+                          testingStatus: state.testingStatus,
+                          collectedAmount: state.collectedAmount,
+                          events: state.events,
+                          onStartTest: () {
+                            context.read<BillAcceptorCubit>().startTest(
+                                  state.testAmount,
+                                );
+                          },
+                          onStopTest: () {
+                            context.read<BillAcceptorCubit>().stopTest();
+                          },
+                        ),
                       ),
                     ),
 
                     // Действия
                     SliverToBoxAdapter(
-                      child: ActionsSection(
-                        onResetCount: () => _showResetConfirmation(context),
+                      child: PermissionWidget(
+                        permission: PermissionsMapping.billAcceptorReset,
+                        child: ActionsSection(
+                          onResetCount: () => _showResetConfirmation(context),
+                        ),
                       ),
                     ),
                   ],

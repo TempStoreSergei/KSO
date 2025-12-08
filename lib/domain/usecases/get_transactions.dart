@@ -12,7 +12,7 @@ class GetTransactions {
 
   Future<List<Transaction>> call() async {
     try {
-      final response = await _apiClient.get('/guests/get_transactions');
+      final response = await _apiClient.get('/transactions/get_transactions');
 
       if (response['transactions'] != null) {
         final List<dynamic> transactionsJson = response['transactions'];

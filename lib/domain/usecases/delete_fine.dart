@@ -12,7 +12,7 @@ class DeleteFineUseCase {
   /// Удалить штраф по ID
   Future<void> execute(int fineId) async {
     try {
-      await _apiClient.delete('/guests/delete_fine?fine_id=$fineId');
+      await _apiClient.delete('/fines/delete_fine?fine_id=$fineId');
     } catch (e) {
       throw Exception('Ошибка при удалении штрафа: $e');
     }

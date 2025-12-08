@@ -3,9 +3,11 @@
 // ============================================
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:motel/data/repositories/admin_auth_repository_impl.dart';
 import 'package:motel/domain/usecases/login_admin.dart';
 import 'package:motel/presentation/settings/settings_screen.dart';
+import 'package:motel/presentation/settings/server/server_settings_screen.dart';
 import 'package:motel/presentation/guest_info/custom_keyboard.dart';
 import 'package:motel/presentation/guest_info/keyboard_notifier.dart';
 import 'package:provider/provider.dart';
@@ -35,7 +37,6 @@ class _AdminLoginViewState extends State<_AdminLoginView> {
   final _usernameFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
 
-  int _focusedFieldIndex = 0;
   bool _isLoading = false;
   bool _showError = false;
   String _errorMessage = '';
@@ -47,7 +48,6 @@ class _AdminLoginViewState extends State<_AdminLoginView> {
     _usernameFocusNode.addListener(() {
       if (_usernameFocusNode.hasFocus) {
         setState(() {
-          _focusedFieldIndex = 0;
           _showError = false;
         });
         final keyboardNotifier = Provider.of<KeyboardNotifier>(context, listen: false);
@@ -58,7 +58,6 @@ class _AdminLoginViewState extends State<_AdminLoginView> {
     _passwordFocusNode.addListener(() {
       if (_passwordFocusNode.hasFocus) {
         setState(() {
-          _focusedFieldIndex = 1;
           _showError = false;
         });
         final keyboardNotifier = Provider.of<KeyboardNotifier>(context, listen: false);
@@ -111,66 +110,101 @@ class _AdminLoginViewState extends State<_AdminLoginView> {
 
     final repository = AdminAuthRepositoryImpl();
     final loginUseCase = LoginAdmin(repository);
-    final success = await loginUseCase.call(
-      _usernameController.text,
-      _passwordController.text,
-    );
-
-    if (!mounted) return;
-
-    setState(() => _isLoading = false);
-
-    if (success) {
-      Navigator.of(context).pushReplacement(
-        CupertinoPageRoute(builder: (_) => AdminDashboardScreen()),
+    try {
+      final success = await loginUseCase.call(
+        _usernameController.text,
+        _passwordController.text,
       );
-    } else {
+
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      if (success) {
+        Navigator.of(context).pushReplacement(
+          CupertinoPageRoute(builder: (_) => AdminDashboardScreen()),
+        );
+      } else {
+        setState(() {
+          _errorMessage = 'Неверное имя пользователя или пароль';
+          _showError = true;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'Неверное имя пользователя или пароль';
+        _isLoading = false;
+        _errorMessage = 'Ошибка подключения: $e';
         _showError = true;
       });
     }
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String placeholder,
-    required FocusNode focusNode,
-    required bool isFocused,
-    bool obscureText = false,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: isFocused
-            ? Border.all(color: CupertinoColors.activeBlue, width: 2)
-            : null,
-      ),
-      child: CupertinoTextField(
-        controller: controller,
-        focusNode: focusNode,
-        placeholder: placeholder,
-        obscureText: obscureText,
-        style: const TextStyle(color: CupertinoColors.white, fontSize: 16),
-        placeholderStyle: const TextStyle(color: CupertinoColors.systemGrey, fontSize: 16),
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.circular(10),
+  Future<void> _showSettingsPasswordDialog() async {
+    final controller = TextEditingController();
+    
+    // Используем отдельный notifier для диалога, если нужно, но пока простая клавиатура
+    // В идеале нужно интегрировать с глобальной клавиатурой, но для диалогов это сложно.
+    // Пока используем стандартный ввод (полагаясь на то, что админ может подключить физ. клавиатуру 
+    // или использовать экранную если доступна системная). 
+    // В киоск-режиме системной клавиатуры может не быть. 
+    // Поэтому лучше использовать текущую кастомную клавиатуру, но это потребует перестройки UI.
+    
+    // Упрощение: Проверяем пароль просто через поле, предполагая, что фокус перехватится
+    // нашей кастомной клавиатурой, если мы переключим поле.
+    
+    // НО: Наша кастомная клавиатура привязана к полям _usernameController/_passwordController.
+    // Чтобы ввести пароль для настроек, нужно либо добавить поле в список KeyboardNotifier,
+    // либо (проще) использовать одно из существующих полей как "ввод пароля".
+    
+    // Вариант: Кнопка "Настройки" просто проверяет текущий введенный пароль в поле "Пароль"
+    // если логин пустой? Нет, это неочевидно.
+    
+    // Лучший вариант: Показать диалог. Но кастомная клавиатура перекрывается диалогом?
+    // Нет, она внизу Column, а диалог модальный.
+    
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Вход в настройки сервера'),
+        content: Column(
+          children: [
+            const Text('Введите пароль из .env для доступа к настройкам подключения.'),
+            const SizedBox(height: 12),
+            CupertinoTextField(
+              controller: controller,
+              obscureText: true,
+              placeholder: 'Пароль настроек',
+              style: const TextStyle(color: CupertinoColors.black),
+            ),
+          ],
         ),
-        prefix: isFocused
-            ? const Padding(
-          padding: EdgeInsets.only(left: 12.0, right: 12.0),
-          child: Icon(
-            CupertinoIcons.minus_circle_fill,
-            color: CupertinoColors.white,
-            size: 24,
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Отмена'),
+            onPressed: () => Navigator.of(ctx).pop(),
           ),
-        )
-            : null,
+          CupertinoDialogAction(
+            child: const Text('Войти'),
+            onPressed: () {
+              final settingsPassword = dotenv.env['SETTINGS_PASSWORD'];
+              if (controller.text == settingsPassword) {
+                Navigator.of(ctx).pop(); // Закрыть диалог
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const ServerSettingsScreen()),
+                );
+              } else {
+                // Можно показать ошибку, но пока просто закроем или ничего не сделаем
+                // Для простоты - ничего.
+                controller.clear();
+              }
+            },
+          ),
+        ],
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -181,28 +215,49 @@ class _AdminLoginViewState extends State<_AdminLoginView> {
       child: SafeArea(
         child: Column(
           children: [
-            // Кнопка назад
-            Align(
-              alignment: Alignment.topLeft,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1C1C1E),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      CupertinoIcons.back,
-                      color: CupertinoColors.white,
-                      size: 24,
+            // Верхняя панель: Назад и Настройки
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1C1C1E),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.back,
+                        color: CupertinoColors.white,
+                        size: 24,
+                      ),
                     ),
                   ),
-                ),
+                  
+                  // Кнопка настроек (шестеренка)
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: _showSettingsPasswordDialog,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1C1C1E),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.settings,
+                        color: CupertinoColors.systemGrey,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -253,19 +308,37 @@ class _AdminLoginViewState extends State<_AdminLoginView> {
                         const SizedBox(height: 36),
 
                         // Поля ввода
-                        _buildTextField(
-                          controller: _usernameController,
-                          placeholder: 'Имя пользователя',
-                          focusNode: _usernameFocusNode,
-                          isFocused: _focusedFieldIndex == 0,
-                        ),
-                        const SizedBox(height: 12),
-                        _buildTextField(
-                          controller: _passwordController,
-                          placeholder: 'Пароль',
-                          focusNode: _passwordFocusNode,
-                          isFocused: _focusedFieldIndex == 1,
-                          obscureText: true,
+                        CupertinoListSection.insetGrouped(
+                          backgroundColor: CupertinoColors.transparent,
+                          children: [
+                            CupertinoListTile(
+                              title: const Text('Имя пользователя'),
+                              additionalInfo: Expanded(
+                                child: CupertinoTextField(
+                                  controller: _usernameController,
+                                  focusNode: _usernameFocusNode,
+                                  textAlign: TextAlign.end,
+                                  style: const TextStyle(color: CupertinoColors.systemGrey),
+                                  decoration: null,
+                                  placeholder: 'Имя пользователя',
+                                ),
+                              ),
+                            ),
+                            CupertinoListTile(
+                              title: const Text('Пароль'),
+                              additionalInfo: Expanded(
+                                child: CupertinoTextField(
+                                  controller: _passwordController,
+                                  focusNode: _passwordFocusNode,
+                                  textAlign: TextAlign.end,
+                                  style: const TextStyle(color: CupertinoColors.systemGrey),
+                                  decoration: null,
+                                  obscureText: true,
+                                  placeholder: 'Пароль',
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
 
                         // Сообщение об ошибке

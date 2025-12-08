@@ -30,7 +30,7 @@ class _FineEditScreenState extends State<FineEditScreen> {
     super.initState();
     _nameController = TextEditingController(text: widget.fine?.name ?? '');
     _priceController = TextEditingController(
-      text: widget.fine?.price.toString() ?? '',
+      text: widget.fine != null ? (widget.fine!.price ~/ 100).toString() : '',
     );
     if (widget.fine != null) {
       _selectedType = widget.fine!.type;

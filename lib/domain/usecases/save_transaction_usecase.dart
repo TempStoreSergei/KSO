@@ -1,6 +1,3 @@
-// ============================================
-// lib/domain/usecases/save_transaction_usecase.dart
-// ============================================
 
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/domain/models/booking_models.dart';
@@ -12,49 +9,86 @@ class SaveTransactionUseCase {
   SaveTransactionUseCase(this._apiClient);
 
   Future<void> call(BookingData bookingData) async {
-    // 1. Преобразуем данные из BookingData в модель запроса
     final requestModel = _mapBookingDataToRequest(bookingData);
 
-    // 2. Отправляем POST-запрос с данными в формате JSON
     try {
-      print("[SaveTransactionUseCase] Отправляю данные на /guests/save_transaction...");
-      print("Тело запроса: ${requestModel.toJson()}");
-
       await _apiClient.post(
-        '/guests/save_transaction',
+        '/transactions/save_transaction',
         body: requestModel.toJson(),
       );
-
-      print("[SaveTransactionUseCase] Данные успешно отправлены.");
     } catch (e) {
-      print("[SaveTransactionUseCase] КРИТИЧЕСКАЯ ОШИБКА при отправке данных: $e");
-      // Перебрасываем ошибку, чтобы UI мог ее обработать
       throw Exception('Не удалось сохранить бронирование: $e');
     }
   }
 
-  // Вспомогательный метод для маппинга данных
   SaveTransactionRequest _mapBookingDataToRequest(BookingData data) {
-    // Собираем массив ID сервисов из выбранных элементов
-    final List<int>? serviceIds = data.selectedItems.isNotEmpty
-        ? data.selectedItems
-            .map((item) => int.tryParse(item.id) ?? 0)
-            .where((id) => id != 0)
-            .toList()
-        : null;
+    List<Map<String, int>>? services;
+    List<Map<String, int>>? fines;
+
+    // Определяем, что мы отправляем - услуги или штрафы
+    if (data.selectedCategory == BookingCategory.services ||
+        data.selectedCategory == BookingCategory.accommodation) {
+      if (data.selectedItems.isNotEmpty) {
+        services = data.selectedItems.map((item) {
+          final Map<String, int> serviceMap = {
+            'id': int.tryParse(item.id) ?? 0,
+          };
+          if (item.isCountable && item.quantity > 0) {
+            serviceMap['count'] = item.quantity;
+          }
+          if (item.isDuration && item.quantity > 0) {
+            serviceMap['duration'] = item.quantity;
+          }
+          return serviceMap;
+        }).toList();
+      }
+    } else if (data.selectedCategory == BookingCategory.ruleViolationPenalty ||
+        data.selectedCategory == BookingCategory.propertyDamagePenalty) {
+      if (data.selectedItems.isNotEmpty) {
+        fines = data.selectedItems.map((item) {
+          final Map<String, int> fineMap = {
+            'id': int.tryParse(item.id) ?? 0,
+          };
+          // Предполагаем, что штрафы тоже могут быть исчисляемыми
+          if (item.isCountable && item.quantity > 0) {
+            fineMap['count'] = item.quantity;
+          }
+          return fineMap;
+        }).toList();
+      }
+    }
+
+    // Собираем новый объект room
+    final roomInfo = RoomInfoRequest(
+      number: data.selectedRoom?.name ?? '0',
+      type: data.selectedRoom?.type.toApiString() ?? 'unknown',
+      building: int.tryParse(data.selectedRoom?.buildingId ?? '0') ?? 0,
+      countDays: data.totalNights,
+    );
 
     return SaveTransactionRequest(
       guest: GuestInfoRequest(
         firstName: data.firstName ?? '',
         lastName: data.lastName ?? '',
-        surname: data.middleName ?? '', // Маппим middleName в surname
+        surname: data.middleName ?? '',
       ),
-      room: data.selectedRoom?.name ?? '0', // Номер комнаты как строка
-      services: serviceIds,
-      // Конвертируем даты в стандартный формат ISO 8601 (опционально)
-      checkIn: data.checkInDate.toIso8601String(),
-      checkOut: data.checkOutDate.toIso8601String(),
-      paymentType: data.paymentMethod ?? 'unknown',
+      room: roomInfo,
+      services: services,
+      fines: fines,
+      paymentSumm: data.totalPrice,
+      paymentType: _convertPaymentType(data.paymentMethod),
     );
+  }
+
+  /// Преобразует метод оплаты в формат для сервера
+  /// "Наличные" → "Наличные"
+  /// "СБП" или "Карта" → "Он-лайн платёж(СБП, Карта)"
+  String _convertPaymentType(String? paymentMethod) {
+    if (paymentMethod == 'Наличные') {
+      return 'Наличные';
+    } else if (paymentMethod == 'СБП' || paymentMethod == 'Карта') {
+      return 'Он-лайн платёж';
+    }
+    return 'Наличные'; // По умолчанию
   }
 }

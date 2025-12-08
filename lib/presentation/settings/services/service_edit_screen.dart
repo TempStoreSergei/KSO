@@ -33,13 +33,15 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
   bool _isBusy = false;
 
   // Доступные варианты налога
-  final List<int> _availableTaxes = [0, 10, 20];
+  final List<int> _availableTaxes = [0, 5, 7, 10, 18, 20];
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.service?.name);
-    _priceController = TextEditingController(text: widget.service?.price.toString() ?? '');
+    _priceController = TextEditingController(
+      text: widget.service != null ? (widget.service!.price ~/ 100).toString() : ''
+    );
     _tax = widget.service?.tax ?? 20;
     _isCountable = widget.service?.isCountable ?? false;
     _isDuration = widget.service?.isDuration ?? false;
@@ -69,7 +71,8 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
 
     await _runBusy(() async {
       final name = _nameController.text;
-      final price = int.tryParse(_priceController.text);
+      final priceInRubles = int.tryParse(_priceController.text);
+      final price = priceInRubles != null ? priceInRubles * 100 : null;
 
       final bool success;
       if (widget.isEditing) {

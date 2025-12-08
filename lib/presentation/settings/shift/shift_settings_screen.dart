@@ -3,14 +3,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/constants/permissions_mapping.dart';
+import 'package:motel/presentation/widgets/permission_widget.dart';
 import 'package:motel/presentation/settings/shift/cubit/shift_cubit.dart';
 import 'package:motel/presentation/settings/shift/cubit/shift_state.dart';
 import 'package:motel/presentation/settings/shift/models/shift_settings.dart';
-import 'package:motel/presentation/settings/shift/widgets/auto_shifts_section.dart';
 import 'package:motel/presentation/settings/shift/widgets/manual_control_section.dart';
 import 'package:motel/presentation/settings/shift/widgets/shift_status_section.dart';
-import 'package:motel/presentation/settings/shift/widgets/shift_time_picker.dart';
-import 'package:motel/presentation/settings/shift/widgets/shift_times_section.dart';
 
 class ShiftSettingsScreen extends StatelessWidget {
   const ShiftSettingsScreen({super.key});
@@ -116,91 +115,29 @@ class _ShiftSettingsView extends StatelessWidget {
   Widget _buildContent(BuildContext context, ShiftSettings settings) {
     return SliverMainAxisGroup(
       slivers: [
-        // Статус текущей смены
+        // Статус текущей смены (доступно всем)
         SliverToBoxAdapter(
           child: ShiftStatusSection(settings: settings),
         ),
 
-        // Автоматические смены
+        // Ручное управление
         SliverToBoxAdapter(
-          child: AutoShiftsSection(
-            autoShiftsEnabled: settings.autoShiftsIsEnable,
-            onToggle: (enabled) {
-              context.read<ShiftCubit>().toggleAutoShifts(enabled, settings);
-            },
-          ),
-        ),
-
-        // Настройки времени
-        if (settings.autoShiftsIsEnable)
-          SliverToBoxAdapter(
-            child: ShiftTimesSection(
-              openTime: settings.autoShiftsTimeToOpen,
-              closeTime: settings.autoShiftsTimeToClose,
-              onOpenTimePressed: () => _showTimePicker(
-                context: context,
-                title: 'Время открытия',
-                currentTime: settings.autoShiftsTimeToOpen,
-                onTimeSelected: (time) {
-                  context.read<ShiftCubit>().updateLocalTime(
-                        time,
-                        settings.autoShiftsTimeToClose,
-                        settings,
-                      );
-                },
-              ),
-              onCloseTimePressed: () => _showTimePicker(
-                context: context,
-                title: 'Время закрытия',
-                currentTime: settings.autoShiftsTimeToClose,
-                onTimeSelected: (time) {
-                  context.read<ShiftCubit>().updateLocalTime(
-                        settings.autoShiftsTimeToOpen,
-                        time,
-                        settings,
-                      );
-                },
-              ),
-              onSavePressed: () {
-                context.read<ShiftCubit>().updateShiftTimes(
-                      settings.autoShiftsTimeToOpen,
-                      settings.autoShiftsTimeToClose,
-                      settings,
-                    );
-                _showSuccessDialog(context, 'Время смен обновлено');
+          child: PermissionWidget(
+            permission: PermissionsMapping.shiftOpen,
+            child: ManualControlSection(
+              isShiftOpen: settings.shiftIsOpened,
+              onOpenShift: () {
+                context.read<ShiftCubit>().openShift();
+                _showSuccessDialog(context, 'Смена открыта');
+              },
+              onCloseShift: () {
+                context.read<ShiftCubit>().closeShift();
+                _showSuccessDialog(context, 'Смена закрыта');
               },
             ),
           ),
-
-        // Ручное управление
-        SliverToBoxAdapter(
-          child: ManualControlSection(
-            isShiftOpen: settings.shiftIsOpened,
-            onOpenShift: () {
-              context.read<ShiftCubit>().openShift();
-              _showSuccessDialog(context, 'Смена открыта');
-            },
-            onCloseShift: () {
-              context.read<ShiftCubit>().closeShift();
-              _showSuccessDialog(context, 'Смена закрыта');
-            },
-          ),
         ),
       ],
-    );
-  }
-
-  void _showTimePicker({
-    required BuildContext context,
-    required String title,
-    required String currentTime,
-    required Function(String) onTimeSelected,
-  }) {
-    ShiftTimePicker.show(
-      context: context,
-      title: title,
-      currentTime: currentTime,
-      onTimeSelected: onTimeSelected,
     );
   }
 
