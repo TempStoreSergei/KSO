@@ -19,9 +19,9 @@ class PermissionsMapping {
   static const String billAcceptorStop = 'stop_accepting_payment'; // Остановка приема
 
   // СМЕНЫ
-  static const String shiftManagement = 'open'; // Управление сменами - основной доступ
-  static const String shiftOpen = 'open'; // Открытие смены
-  static const String shiftClose = 'close'; // Закрытие смены
+  static const String shiftManagement = 'open_shift'; // Управление сменами - основной доступ
+  static const String shiftOpen = 'open_shift'; // Открытие смены
+  static const String shiftClose = 'close_shift'; // Закрытие смены
 
   // УСЛУГИ И ШТРАФЫ
   static const String services = 'add_service'; // Услуги - основной доступ

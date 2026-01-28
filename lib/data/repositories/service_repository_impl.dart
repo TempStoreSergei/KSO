@@ -34,18 +34,19 @@ class ServiceRepositoryImpl implements ServiceRepository {
   }
 
   @override
-  Future<bool> createService({required String name, int? price, required int tax, required bool isCountable, required bool isDuration}) {
+  Future<bool> createService({required String name, int? price, required int tax, required bool isCountable, required bool isDuration, required String code}) {
     return _handleRequest(() => remoteDataSource.createService(
       name: name,
       price: price,
       tax: tax,
       isCountable: isCountable,
       isDuration: isDuration,
+      code: code,
     ));
   }
 
   @override
-  Future<bool> updateService({required String serviceID, required String name, int? price, required int tax, required bool isCountable, required bool isDuration}) {
+  Future<bool> updateService({required String serviceID, required String name, int? price, required int tax, required bool isCountable, required bool isDuration, required String code}) {
     return _handleRequest(() => remoteDataSource.updateService(
       serviceID: serviceID,
       name: name,
@@ -53,6 +54,7 @@ class ServiceRepositoryImpl implements ServiceRepository {
       tax: tax,
       isCountable: isCountable,
       isDuration: isDuration,
+      code: code,
     ));
   }
 

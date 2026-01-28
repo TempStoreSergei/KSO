@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:motel/presentation/lock_screen/lock_screen.dart'; // Убедитесь, что путь верный
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/navigation/app_navigator.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +23,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoApp(
+      navigatorKey: AppNavigator.navigatorKey,
       // --- ПРАВИЛЬНАЯ КОНФИГУРАЦИЯ ДЛЯ CUPERTINOAPP ---
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

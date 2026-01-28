@@ -5,6 +5,7 @@ import 'package:motel/presentation/booking/cubit/booking_state.dart';
 import 'package:motel/domain/usecases/get_rooms.dart';
 import 'package:motel/data/models/room_model.dart';
 import 'package:motel/core/services/metrics_service.dart';
+import 'package:motel/presentation/booking/formatters/ru_phone.dart';
 
 class BookingCubit extends Cubit<BookingState> {
   final GetRooms _getRooms;
@@ -198,7 +199,9 @@ class BookingCubit extends Cubit<BookingState> {
       case BookingStep.roomSelection:
         return data.selectedRoom != null;
       case BookingStep.guestInfo:
-        return (data.lastName?.isNotEmpty ?? false) && (data.firstName?.isNotEmpty ?? false);
+        return (data.lastName?.isNotEmpty ?? false) &&
+            (data.firstName?.isNotEmpty ?? false) &&
+            normalizeRuPhoneDigits(data.phoneNumber ?? '') != null;
       case BookingStep.categorySelection:
         return data.selectedCategory != BookingCategory.unknown;
       case BookingStep.period:

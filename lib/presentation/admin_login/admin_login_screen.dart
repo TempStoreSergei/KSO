@@ -111,7 +111,7 @@ class _AdminLoginViewState extends State<_AdminLoginView> {
     final repository = AdminAuthRepositoryImpl();
     final loginUseCase = LoginAdmin(repository);
     try {
-      final success = await loginUseCase.call(
+      final response = await loginUseCase.call(
         _usernameController.text,
         _passwordController.text,
       );
@@ -120,13 +120,13 @@ class _AdminLoginViewState extends State<_AdminLoginView> {
 
       setState(() => _isLoading = false);
 
-      if (success) {
+      if (response.success) {
         Navigator.of(context).pushReplacement(
           CupertinoPageRoute(builder: (_) => AdminDashboardScreen()),
         );
       } else {
         setState(() {
-          _errorMessage = 'Неверное имя пользователя или пароль';
+          _errorMessage = response.detail ?? 'Неверное имя пользователя или пароль';
           _showError = true;
         });
       }

@@ -47,12 +47,14 @@ class TransactionGuest {
   final String firstName;
   final String lastName;
   final String surname;
+  final String? phoneNumber;
 
   TransactionGuest({
     required this.id,
     required this.firstName,
     required this.lastName,
     required this.surname,
+    this.phoneNumber,
   });
 
   factory TransactionGuest.fromJson(Map<String, dynamic> json) {
@@ -61,6 +63,7 @@ class TransactionGuest {
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
       surname: json['surname'] ?? '',
+      phoneNumber: json['phoneNumber'],
     );
   }
 }
@@ -102,14 +105,29 @@ class TransactionService {
 
 class TransactionFine {
   final int id;
+  final String name;
+  final int price;
+  final int totalPrice;
   final int count;
+  final String fineCode;
 
-  TransactionFine({required this.id, required this.count});
+  TransactionFine({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.totalPrice,
+    required this.count,
+    required this.fineCode,
+  });
 
   factory TransactionFine.fromJson(Map<String, dynamic> json) {
     return TransactionFine(
       id: json['id'],
+      name: json['name'],
+      price: json['price'],
+      totalPrice: json['totalPrice'],
       count: json['count'],
+      fineCode: json['fineCode'] ?? '',
     );
   }
 }

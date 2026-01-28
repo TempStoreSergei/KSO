@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/core/constants/permissions_mapping.dart';
 import 'package:motel/core/services/permissions_service.dart';
+import 'package:motel/core/services/token_service.dart';
 import 'package:motel/data/datasources/service_remote_data_source.dart';
 import 'package:motel/data/repositories/service_repository_impl.dart';
 import 'package:motel/domain/entities/service_entity.dart';
@@ -23,6 +24,8 @@ class _ServicesSettingsScreenState extends State<ServicesSettingsScreen> {
   final ServiceRepository _repository = ServiceRepositoryImpl(
       remoteDataSource: ServiceRemoteDataSourceImpl(apiClient: ApiClient.instance));
   final PermissionsService _permissionsService = PermissionsService();
+  final TokenService _tokenService = TokenService();
+  
   List<ServiceEntity>? _services;
   bool _isLoading = false;
   bool _canAddService = false;
@@ -36,8 +39,9 @@ class _ServicesSettingsScreenState extends State<ServicesSettingsScreen> {
   }
 
   Future<void> _loadPermissions() async {
-    final canAdd = await _permissionsService.hasPermission(PermissionsMapping.servicesAdd);
-    final canUpdate = await _permissionsService.hasPermission(PermissionsMapping.servicesUpdate);
+    final role = await _tokenService.getUserRole();
+    final canAdd = _permissionsService.hasPermission(role, PermissionsMapping.servicesAdd);
+    final canUpdate = _permissionsService.hasPermission(role, PermissionsMapping.servicesUpdate);
     if (mounted) {
       setState(() {
         _canAddService = canAdd;

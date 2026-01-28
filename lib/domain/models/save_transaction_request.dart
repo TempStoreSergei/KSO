@@ -3,17 +3,20 @@ class GuestInfoRequest {
   final String firstName;
   final String lastName;
   final String surname;
+  final String phoneNumber;
 
   GuestInfoRequest({
     required this.firstName,
     required this.lastName,
     required this.surname,
+    required this.phoneNumber,
   });
 
   Map<String, dynamic> toJson() => {
         'firstName': firstName,
         'lastName': lastName,
         'surname': surname,
+        'phoneNumber': phoneNumber,
       };
 }
 

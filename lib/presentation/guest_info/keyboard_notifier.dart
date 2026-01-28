@@ -90,7 +90,7 @@ class KeyboardNotifier extends ChangeNotifier {
     final newText = text.substring(0, selection.baseOffset - 1) + text.substring(selection.baseOffset);
     controller.value = TextEditingValue(
       text: newText,
-      selection: TextSelection.collapsed(offset: selection.baseOffset - 1),
+      selection: TextSelection.collapsed(offset: (selection.baseOffset - 1).clamp(0, newText.length)),
     );
   }
 
@@ -105,9 +105,11 @@ class KeyboardNotifier extends ChangeNotifier {
         text
     );
 
-    controller.text = newText;
-    controller.selection = TextSelection.collapsed(
-        offset: selection.start + text.length
+    controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset: (selection.start + text.length).clamp(0, newText.length),
+      ),
     );
   }
 }

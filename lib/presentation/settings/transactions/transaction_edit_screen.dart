@@ -283,7 +283,7 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
                 child: const Text('OK'),
                 onPressed: () {
                   Navigator.of(ctx).pop();
-                  Navigator.of(context).pop(); // Возвращаемся к деталям транзакции
+                  Navigator.of(context).pop(true); // Возвращаемся к деталям транзакции
                 },
               ),
             ],

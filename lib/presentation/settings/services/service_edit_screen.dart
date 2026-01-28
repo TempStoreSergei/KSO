@@ -27,6 +27,7 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
 
   late TextEditingController _nameController;
   late TextEditingController _priceController;
+  late TextEditingController _codeController;
   late int _tax;
   late bool _isCountable;
   late bool _isDuration;
@@ -42,6 +43,7 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
     _priceController = TextEditingController(
       text: widget.service != null ? (widget.service!.price ~/ 100).toString() : ''
     );
+    _codeController = TextEditingController(text: widget.service?.code);
     _tax = widget.service?.tax ?? 20;
     _isCountable = widget.service?.isCountable ?? false;
     _isDuration = widget.service?.isDuration ?? false;
@@ -51,6 +53,7 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
@@ -73,6 +76,7 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
       final name = _nameController.text;
       final priceInRubles = int.tryParse(_priceController.text);
       final price = priceInRubles != null ? priceInRubles * 100 : null;
+      final code = _codeController.text;
 
       final bool success;
       if (widget.isEditing) {
@@ -82,14 +86,16 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
             price: price,
             tax: _tax,
             isCountable: _isCountable,
-            isDuration: _isDuration);
+            isDuration: _isDuration,
+            code: code);
       } else {
         success = await _repository.createService(
             name: name,
             price: price,
             tax: _tax,
             isCountable: _isCountable,
-            isDuration: _isDuration);
+            isDuration: _isDuration,
+            code: code);
       }
 
       if (mounted) {
@@ -199,6 +205,14 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
                             placeholder: 'Например, 500',
                             keyboardType: TextInputType.number,
                             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          ),
+                          CupertinoTextFormFieldRow(
+                            controller: _codeController,
+                            prefix: const Text('Код'),
+                            placeholder: 'Например, SERVICE_001',
+                            validator: (value) => (value?.isEmpty ?? true)
+                                ? 'Код не может быть пустым'
+                                : null,
                           ),
                         ],
                       ),

@@ -2,11 +2,17 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/domain/entities/transaction.dart';
+import 'package:motel/domain/usecases/get_client_by_number.dart';
 import 'package:motel/domain/usecases/get_transactions.dart';
+import 'package:motel/domain/usecases/send_transaction_to_1c_usecase.dart';
 import 'package:motel/presentation/settings/transactions/transaction_detail_screen.dart';
+import 'package:motel/presentation/settings/transactions/transaction_edit_screen.dart';
 import 'package:motel/presentation/settings/transactions/transactions_filters_screen.dart';
+import 'package:motel/presentation/settings/transactions/models/send_mode.dart';
+import 'package:motel/presentation/settings/transactions/widgets/transaction_tile.dart';
+import 'package:motel/presentation/settings/transactions/widgets/transactions_header_panel.dart';
+import 'package:motel/presentation/settings/transactions/widgets/transactions_selection_panel.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
 
 enum PaymentFilter {
   all('Все'),
@@ -37,10 +43,27 @@ class TransactionsScreen extends StatefulWidget {
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
   final _getTransactionsUseCase = GetTransactions(ApiClient.instance);
+  final _getClientByNumberUseCase = GetClientByNumberUseCase(
+      ApiClient.instance);
   final _searchController = TextEditingController();
+  final TextEditingController _clientIdController = TextEditingController();
+
+  final Color _accentColor = CupertinoColors.activeBlue;
 
   List<Transaction>? _transactions;
   bool _isLoading = false;
+
+  // Набор ID транзакций, которые сейчас обрабатываются (отправляются в 1С)
+  final Set<int> _processingIds = {};
+
+  // Множественный выбор
+  bool _selectionMode = false;
+  final Set<int> _selectedTransactionIds = {};
+  final Map<int, String> _validatedClientIds = {};
+  final Map<int, String> _validationErrors = {};
+  bool _isValidatingPhones = false;
+  bool _isBulkSending = false;
+  SendMode _sendMode = SendMode.single;
 
   // Фильтры
   PaymentFilter _paymentFilter = PaymentFilter.all;
@@ -56,6 +79,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _clientIdController.dispose();
     super.dispose();
   }
 
@@ -64,6 +88,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     try {
       final transactions = await _getTransactionsUseCase.call();
       if (mounted) {
+        // Сортируем по ID (последние сверху)
+        transactions.sort((a, b) => b.id.compareTo(a.id));
         setState(() {
           _transactions = transactions;
           _isLoading = false;
@@ -77,6 +103,277 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
   }
 
+  Future<void> _sendTo1C(Transaction transaction) async {
+    await _sendTo1CInternal(transaction);
+  }
+
+  Future<String?> _resolveClientIdForTransaction(
+    Transaction transaction, {
+    String? presetClientId,
+  }) async {
+    final preset = presetClientId?.trim();
+    if (preset != null && preset.isNotEmpty) return preset;
+
+    final phoneNumber = transaction.guest.phoneNumber;
+    if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
+      final foundClientId = await _getClientByNumberUseCase.call(phoneNumber.trim());
+      if (foundClientId != null && foundClientId.isNotEmpty) {
+        return foundClientId;
+      }
+    }
+
+    if (!mounted) return null;
+
+    _clientIdController.text = transaction.guest.id.toString();
+    final manualInput = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Отправка в 1С'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            const Text(
+              'Введите Client ID для отправки в систему 1С:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            CupertinoTextField(
+              controller: _clientIdController,
+              placeholder: 'Client ID',
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Отмена'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('Отправить'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+
+    if (manualInput != true) return null;
+    final entered = _clientIdController.text.trim();
+    return entered.isEmpty ? null : entered;
+  }
+
+  Future<void> _sendTo1CInternal(Transaction transaction, {
+    String? presetClientId,
+    bool showSuccess = true,
+    bool reloadOnSuccess = true,
+  }) async {
+    if (transaction.sentSuccessfully) {
+      if (mounted) {
+        _showError('Транзакция уже отправлена в 1С');
+      }
+      return;
+    }
+    if (_processingIds.contains(transaction.id)) return;
+
+    setState(() {
+      _processingIds.add(transaction.id);
+    });
+
+    try {
+      final clientId = await _resolveClientIdForTransaction(
+        transaction,
+        presetClientId: presetClientId,
+      );
+      if (clientId == null || clientId.isEmpty) return;
+
+      // 3. Отправляем в 1С
+      final useCase = SendTransactionTo1CUseCase(ApiClient.instance);
+      await useCase.call(transaction, clientId);
+      if (mounted) {
+        if (showSuccess) {
+          _showSuccess('Транзакция отправлена в 1С');
+        }
+        if (reloadOnSuccess) {
+          _loadTransactions(); // Обновить список
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Ошибка при отправке: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingIds.remove(transaction.id);
+        });
+      }
+    }
+  }
+
+  Future<void> _validatePhones({Set<int>? targetIds}) async {
+    if (_transactions == null) {
+      _showError('Дождитесь загрузки транзакций');
+      return;
+    }
+    final allIds = targetIds ?? _filteredTransactions.map((t) => t.id).toSet();
+    final ids = allIds.where((id) => _getTransactionById(id)?.sentSuccessfully != true).toSet();
+    if (ids.isEmpty) {
+      _showError('Нет транзакций для проверки');
+      return;
+    }
+
+    setState(() {
+      _isValidatingPhones = true;
+      _validationErrors.removeWhere((key, value) => ids.contains(key));
+      _validatedClientIds.removeWhere((key, value) => ids.contains(key));
+    });
+
+    final successes = <int, String>{};
+    final failures = <int, String>{};
+
+    for (final id in ids) {
+      final transaction = _getTransactionById(id);
+      if (transaction == null) {
+        failures[id] = 'Транзакция не найдена';
+        continue;
+      }
+
+      final phone = transaction.guest.phoneNumber?.trim() ?? '';
+      if (phone.isEmpty) {
+        failures[id] = 'Нет номера телефона';
+        continue;
+      }
+
+      final clientId = await _getClientByNumberUseCase.call(phone);
+      if (clientId == null || clientId.isEmpty) {
+        failures[id] = 'Клиент не найден в 1С';
+        continue;
+      }
+
+      successes[id] = clientId;
+    }
+
+    if (mounted) {
+      setState(() {
+        _validatedClientIds.addAll(successes);
+        _validationErrors.addAll(failures);
+        _isValidatingPhones = false;
+        _selectedTransactionIds
+          ..removeWhere((id) => !successes.containsKey(id))
+          ..addAll(successes.keys);
+      });
+    }
+
+    if (successes.isNotEmpty) {
+      _showSuccess('Номеров проверено: ${successes.length}');
+    }
+    if (failures.isNotEmpty) {
+      final failedList = failures.entries
+          .map((e) => '#${e.key}: ${e.value}')
+          .join('\n');
+      _showError('Не удалось подтвердить: \n$failedList');
+    }
+  }
+
+  Future<void> _sendSelectedTo1C() async {
+    if (_transactions == null) {
+      _showError('Дождитесь загрузки транзакций');
+      return;
+    }
+    if (_selectedTransactionIds.isEmpty) {
+      _showError('Выберите транзакции для отправки');
+      return;
+    }
+    final alreadySent = _selectedTransactionIds.where((id) {
+      final transaction = _getTransactionById(id);
+      return transaction?.sentSuccessfully == true;
+    }).toList();
+    if (alreadySent.isNotEmpty) {
+      _showError('В выборе есть уже отправленные транзакции: ${alreadySent.join(', ')}');
+      return;
+    }
+    final notValidated = _selectedTransactionIds.where((
+        id) => !_validatedClientIds.containsKey(id)).toList();
+    if (notValidated.isNotEmpty) {
+      _showError(
+          'Проверьте номера перед отправкой. Не подтверждены: ${notValidated
+              .join(', ')}');
+      return;
+    }
+
+    setState(() => _isBulkSending = true);
+    final idsToSend = _selectedTransactionIds.toList();
+    final totalToSend = idsToSend.length;
+    for (final id in idsToSend) {
+      final transaction = _getTransactionById(id);
+      if (transaction == null) continue;
+      final clientId = _validatedClientIds[id];
+      if (clientId == null) continue;
+      await _sendTo1CInternal(
+        transaction,
+        presetClientId: clientId,
+        showSuccess: false,
+        reloadOnSuccess: false,
+      );
+    }
+    if (mounted) {
+      setState(() {
+        _selectedTransactionIds.clear();
+        _isBulkSending = false;
+      });
+      await _loadTransactions();
+      _showSuccess('Отправлено: $totalToSend');
+    }
+  }
+
+  Future<void> _sendAllValidated() async {
+    if (_transactions == null) {
+      _showError('Дождитесь загрузки транзакций');
+      return;
+    }
+    final filtered = _filteredTransactions;
+    final candidates = filtered.where((t) => !t.sentSuccessfully).toList();
+    final skippedAlreadySent = filtered.length - candidates.length;
+
+    await _validatePhones(targetIds: candidates.map((t) => t.id).toSet());
+    final idsToSend = candidates.map((t) => t.id).where(_isValidated).toList();
+    if (idsToSend.isEmpty) {
+      _showError(skippedAlreadySent > 0
+          ? 'Нет транзакций для отправки (уже отправлено: $skippedAlreadySent)'
+          : 'Нет подтвержденных номеров для отправки');
+      return;
+    }
+
+    setState(() => _isBulkSending = true);
+    for (final id in idsToSend) {
+      final transaction = _getTransactionById(id);
+      if (transaction == null) continue;
+      final clientId = _validatedClientIds[id];
+      if (clientId == null) continue;
+      await _sendTo1CInternal(
+        transaction,
+        presetClientId: clientId,
+        showSuccess: false,
+        reloadOnSuccess: false,
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _isBulkSending = false;
+        _selectedTransactionIds.clear();
+      });
+      await _loadTransactions();
+      _showSuccess(skippedAlreadySent > 0
+          ? 'Отправлено: ${idsToSend.length}, пропущено (уже отправлено): $skippedAlreadySent'
+          : 'Отправлено: ${idsToSend.length}');
+    }
+  }
+
   List<Transaction> get _filteredTransactions {
     if (_transactions == null) return [];
 
@@ -86,7 +383,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final searchQuery = _searchController.text.toLowerCase();
     if (searchQuery.isNotEmpty) {
       filtered = filtered.where((t) {
-        final guestName = '${t.guest.lastName} ${t.guest.firstName}'.toLowerCase();
+        final guestName = '${t.guest.lastName} ${t.guest.firstName}'
+            .toLowerCase();
         final roomNumber = t.room.number.toLowerCase();
         final transactionId = t.id.toString();
 
@@ -99,7 +397,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     // Фильтр по способу оплаты
     if (_paymentFilter != PaymentFilter.all) {
       filtered = filtered.where((t) {
-        return t.paymentType.toLowerCase() == _paymentFilter.label.toLowerCase();
+        return t.paymentType.toLowerCase() ==
+            _paymentFilter.label.toLowerCase();
       }).toList();
     }
 
@@ -121,7 +420,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
     // Фильтр по корпусу
     if (_selectedBuilding != null) {
-      filtered = filtered.where((t) => t.room.building == _selectedBuilding).toList();
+      filtered =
+          filtered.where((t) => t.room.building == _selectedBuilding).toList();
     }
 
     return filtered;
@@ -148,15 +448,28 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     });
   }
 
+  bool _isValidated(int transactionId) =>
+      _validatedClientIds.containsKey(transactionId);
+
+  Transaction? _getTransactionById(int id) {
+    try {
+      return _transactions?.firstWhere((t) => t.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _showFiltersScreen() async {
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       CupertinoPageRoute(
-        builder: (_) => TransactionsFiltersScreen(
-          paymentFilter: _paymentFilter,
-          status1CFilter: _status1CFilter,
-          selectedBuilding: _selectedBuilding,
-          availableBuildings: _availableBuildings.toList()..sort(),
-        ),
+        builder: (_) =>
+            TransactionsFiltersScreen(
+              paymentFilter: _paymentFilter,
+              status1CFilter: _status1CFilter,
+              selectedBuilding: _selectedBuilding,
+              availableBuildings: _availableBuildings.toList()
+                ..sort(),
+            ),
       ),
     );
 
@@ -172,16 +485,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   void _showError(String message) {
     showCupertinoDialog(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Ошибка'),
-        content: Text(message),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('OK'),
-            onPressed: () => Navigator.of(ctx).pop(),
+      builder: (ctx) =>
+          CupertinoAlertDialog(
+            title: const Text('Ошибка'),
+            content: Text(message),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -193,7 +507,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       final fileUrl = await ApiClient.instance.exportTransactions();
 
       // Определяем имя файла из URL
-      final fileName = fileUrl.split('/').last;
+      final fileName = fileUrl
+          .split('/')
+          .last;
 
       // Показываем диалог выбора места сохранения
       final savePath = await FilePicker.platform.saveFile(
@@ -210,7 +526,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       }
 
       // Скачиваем файл
-      final response = await http.get(Uri.parse(fileUrl));
+      final response = await ApiClient.instance.getRawUrl(fileUrl);
 
       if (response.statusCode == 200) {
         // Сохраняем файл
@@ -235,16 +551,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   void _showSuccess(String message) {
     showCupertinoDialog(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Успешно'),
-        content: Text(message),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('OK'),
-            onPressed: () => Navigator.of(ctx).pop(),
+      builder: (ctx) =>
+          CupertinoAlertDialog(
+            title: const Text('Успешно'),
+            content: Text(message),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -310,6 +627,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 ),
               ),
               CupertinoSliverRefreshControl(onRefresh: _loadTransactions),
+
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -320,6 +638,48 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   ),
                 ),
               ),
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TransactionsHeaderPanel(
+                      sendMode: _sendMode,
+                      accentColor: _accentColor,
+                      isValidating: _isValidatingPhones,
+                      isSending: _isBulkSending,
+                      onValidateAll: () => _validatePhones(),
+                      onSendAll: _sendAllValidated,
+                      onModeChanged: (mode) {
+                        setState(() {
+                          _sendMode = mode;
+                          _selectionMode = mode == SendMode.multi;
+                          _selectedTransactionIds.clear();
+                          _validatedClientIds.clear();
+                          _validationErrors.clear();
+                        });
+                      },
+                    ),
+                    if (_selectionMode)
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+                        child: Text(
+                          'Для множественной отправки выбирайте только записи с подтвержденным номером.',
+                          style: TextStyle(fontSize: 13, color: CupertinoColors.systemGrey),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (_selectionMode)
+                SliverToBoxAdapter(
+                  child: TransactionsSelectionPanel(
+                      selectedCount: _selectedTransactionIds.length,
+                      isValidating: _isValidatingPhones,
+                      isSending: _isBulkSending,
+                      accentColor: _accentColor,
+                      onSendSelected: _sendSelectedTo1C,
+                    ),
+                ),
               if (_hasActiveFilters)
                 SliverToBoxAdapter(
                   child: Padding(
@@ -347,7 +707,79 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                   ),
                 ),
-              _buildTransactionsList(filteredTransactions),
+              if (_transactions != null && filteredTransactions.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40.0),
+                    child: Center(
+                      child: Text(
+                        _hasActiveFilters
+                            ? 'Нет результатов'
+                            : 'Нет транзакций',
+                        style: const TextStyle(
+                          color: CupertinoColors.systemGrey,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              if (_transactions != null && filteredTransactions.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: CupertinoListSection.insetGrouped(
+                    header: const Text('СПИСОК ТРАНЗАКЦИЙ'),
+                    children: filteredTransactions
+                        .map(
+                          (t) =>
+                          TransactionTile(
+                            transaction: t,
+                            selectionMode: _selectionMode,
+                            isSelected: _selectedTransactionIds.contains(t.id),
+                            isValidated: _isValidated(t.id),
+                            validationError: _validationErrors[t.id],
+                            isProcessing: _processingIds.contains(t.id),
+                            accentColor: _accentColor,
+                            onSelect: () {
+                              setState(() {
+                                if (_selectedTransactionIds.contains(t.id)) {
+                                  _selectedTransactionIds.remove(t.id);
+                                } else {
+                                  _selectedTransactionIds.add(t.id);
+                                }
+                              });
+                            },
+                            onSelectBlocked: () => _showError(t.sentSuccessfully
+                                ? 'Транзакция уже отправлена в 1С'
+                                : 'Сначала подтвердите номер телефона для этой транзакции'),
+                            onEdit: () async {
+                              if (_processingIds.contains(t.id)) return;
+                              final result = await Navigator.of(context).push(
+                                CupertinoPageRoute(
+                                  builder: (_) =>
+                                      TransactionEditScreen(transaction: t),
+                                ),
+                              );
+                              if (result == true) _loadTransactions();
+                            },
+                            onSend: () => _sendTo1C(t),
+                            onInfo: () async {
+                              if (_processingIds.contains(t.id)) return;
+                              await Navigator.of(context).push(
+                                CupertinoPageRoute(
+                                  builder: (_) =>
+                                      TransactionDetailScreen(transaction: t),
+                                ),
+                              );
+                              _loadTransactions();
+                            },
+                          ),
+                    )
+                        .toList(),
+                  ),
+                ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 30)),
             ],
           ),
           if (_isLoading && _transactions == null)
@@ -355,208 +787,5 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildTransactionsList(List<Transaction> transactions) {
-    if (_transactions == null) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
-    }
-
-    if (transactions.isEmpty) {
-      return SliverToBoxAdapter(
-        child: CupertinoListSection.insetGrouped(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(40.0),
-              child: Center(
-                child: Text(
-                  _hasActiveFilters ? 'Нет результатов' : 'Нет транзакций',
-                  style: const TextStyle(
-                    color: CupertinoColors.systemGrey,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return SliverToBoxAdapter(
-      child: CupertinoListSection.insetGrouped(
-        header: const Text('СПИСОК ТРАНЗАКЦИЙ'),
-        children: transactions.map((transaction) => _buildTransactionItem(transaction)).toList(),
-      ),
-    );
-  }
-
-  Widget _buildTransactionItem(Transaction transaction) {
-    // Считаем общую сумму
-    final roomTotalPrice = transaction.room.totalPrice ?? 0;
-    final servicesTotalPrice = transaction.services.fold<int>(0, (sum, service) => sum + service.totalPrice);
-    final totalPrice = roomTotalPrice + servicesTotalPrice;
-
-    // Формируем ФИО
-    final guestName = '${transaction.guest.lastName} ${transaction.guest.firstName}';
-
-    return CupertinoListTile(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      title: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  guestName,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    // Номер и комната
-                    Text(
-                      '#${transaction.id} • ',
-                      style: const TextStyle(
-                        color: CupertinoColors.systemGrey,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const Icon(
-                      CupertinoIcons.bed_double,
-                      size: 11,
-                      color: CupertinoColors.systemGrey,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      transaction.room.number,
-                      style: const TextStyle(
-                        color: CupertinoColors.systemGrey,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Способ оплаты
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: _getPaymentColor(transaction.paymentType).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                      child: Text(
-                        transaction.paymentType,
-                        style: TextStyle(
-                          color: _getPaymentColor(transaction.paymentType),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    // Статус 1С
-                    _build1CStatusBadge(transaction),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Сумма как тег
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: CupertinoColors.activeGreen.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${totalPrice ~/ 100} ₽',
-              style: const TextStyle(
-                color: CupertinoColors.activeGreen,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ],
-      ),
-      trailing: const CupertinoListTileChevron(),
-      onTap: () async {
-        await Navigator.of(context).push(CupertinoPageRoute(
-          builder: (_) => TransactionDetailScreen(transaction: transaction),
-        ));
-        _loadTransactions();
-      },
-    );
-  }
-
-  Widget _build1CStatusBadge(Transaction transaction) {
-    if (!transaction.sentTo1c) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: CupertinoColors.systemGrey.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'Не отправлено',
-          style: TextStyle(
-            color: CupertinoColors.systemGrey,
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
-    }
-
-    if (transaction.sentSuccessfully) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: CupertinoColors.systemGreen.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          '✓ Отправлено',
-          style: TextStyle(
-            color: CupertinoColors.systemGreen,
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
-    }
-
-    // Отправлено, но с ошибкой
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: CupertinoColors.systemRed.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: const Text(
-        '✗ Ошибка',
-        style: TextStyle(
-          color: CupertinoColors.systemRed,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Color _getPaymentColor(String paymentType) {
-    switch (paymentType.toLowerCase()) {
-      case 'наличные':
-        return CupertinoColors.systemGreen;
-      case 'карта':
-        return CupertinoColors.systemBlue;
-      case 'сбп':
-        return CupertinoColors.systemPurple;
-      default:
-        return CupertinoColors.systemGrey;
-    }
   }
 }

@@ -2,6 +2,7 @@
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/domain/models/booking_models.dart';
 import 'package:motel/domain/models/save_transaction_request.dart';
+import 'package:motel/presentation/booking/formatters/ru_phone.dart';
 
 class SaveTransactionUseCase {
   final ApiClient _apiClient;
@@ -71,6 +72,7 @@ class SaveTransactionUseCase {
         firstName: data.firstName ?? '',
         lastName: data.lastName ?? '',
         surname: data.middleName ?? '',
+        phoneNumber: normalizeRuPhoneDigits(data.phoneNumber ?? '') ?? '',
       ),
       room: roomInfo,
       services: services,

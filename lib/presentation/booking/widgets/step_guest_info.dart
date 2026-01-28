@@ -3,6 +3,7 @@
 // ============================================
 
 import 'package:flutter/cupertino.dart';
+import 'package:motel/presentation/booking/formatters/ru_phone.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 
 class StepGuestInfo extends StatefulWidget {
@@ -34,13 +35,16 @@ class StepGuestInfo extends StatefulWidget {
 }
 
 class _StepGuestInfoState extends State<StepGuestInfo> {
+  bool _isFormattingPhone = false;
+  int _phoneFormatSeq = 0;
+
   @override
   void initState() {
     super.initState();
     widget.lastNameController.addListener(_onDataChanged);
     widget.firstNameController.addListener(_onDataChanged);
     widget.middleNameController.addListener(_onDataChanged);
-    widget.phoneNumberController.addListener(_onDataChanged);
+    widget.phoneNumberController.addListener(_onPhoneChanged);
   }
 
   void _onDataChanged() {
@@ -48,8 +52,32 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
       widget.firstNameController.text,
       widget.lastNameController.text,
       widget.middleNameController.text,
-      widget.phoneNumberController.text,
+      normalizeRuPhoneDigits(widget.phoneNumberController.text) ?? '',
     );
+  }
+
+  void _onPhoneChanged() {
+    if (_isFormattingPhone) return;
+
+    final seq = ++_phoneFormatSeq;
+    Future.microtask(() {
+      if (!mounted) return;
+      if (seq != _phoneFormatSeq) return;
+      if (_isFormattingPhone) return;
+
+      final current = widget.phoneNumberController.text;
+      final formatted = formatRuPhone(current);
+      if (formatted != current) {
+        _isFormattingPhone = true;
+        widget.phoneNumberController.value = TextEditingValue(
+          text: formatted,
+          selection: TextSelection.collapsed(offset: formatted.length),
+        );
+        _isFormattingPhone = false;
+      }
+
+      _onDataChanged();
+    });
   }
 
   @override
@@ -57,7 +85,7 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
     widget.lastNameController.removeListener(_onDataChanged);
     widget.firstNameController.removeListener(_onDataChanged);
     widget.middleNameController.removeListener(_onDataChanged);
-    widget.phoneNumberController.removeListener(_onDataChanged);
+    widget.phoneNumberController.removeListener(_onPhoneChanged);
     super.dispose();
   }
 
@@ -112,7 +140,7 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
             ),
           ),
           CupertinoListTile(
-            title: const Text('Телефон'),
+            title: const Text('Телефон *'),
             additionalInfo: Expanded(
               child: CupertinoTextField(
                 controller: widget.phoneNumberController,
@@ -120,8 +148,9 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
                 textAlign: TextAlign.end,
                 style: const TextStyle(color: CupertinoColors.systemGrey),
                 decoration: null,
-                placeholder: '+7 999 000-00-00',
+                placeholder: '+7 (999) 000-00-00',
                 keyboardType: TextInputType.phone,
+                inputFormatters: const [RuPhoneTextInputFormatter()],
               ),
             ),
           ),

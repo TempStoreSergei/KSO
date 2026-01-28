@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/domain/models/fine_models.dart';
 import 'package:motel/domain/usecases/add_fine.dart';
+import 'package:motel/domain/usecases/update_fine.dart';
 
 class FineEditScreen extends StatefulWidget {
   final Fine? fine;
@@ -18,9 +19,11 @@ class FineEditScreen extends StatefulWidget {
 
 class _FineEditScreenState extends State<FineEditScreen> {
   final _addFineUseCase = AddFineUseCase(ApiClient.instance);
+  final _updateFineUseCase = UpdateFineUseCase(ApiClient.instance);
 
   late TextEditingController _nameController;
   late TextEditingController _priceController;
+  late TextEditingController _codeController;
   FineType _selectedType = FineType.violationRules;
 
   bool _isLoading = false;
@@ -32,6 +35,7 @@ class _FineEditScreenState extends State<FineEditScreen> {
     _priceController = TextEditingController(
       text: widget.fine != null ? (widget.fine!.price ~/ 100).toString() : '',
     );
+    _codeController = TextEditingController(text: widget.fine?.code ?? '');
     if (widget.fine != null) {
       _selectedType = widget.fine!.type;
     }
@@ -41,13 +45,15 @@ class _FineEditScreenState extends State<FineEditScreen> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
   bool get _isFormValid {
     return _nameController.text.trim().isNotEmpty &&
         _priceController.text.trim().isNotEmpty &&
-        int.tryParse(_priceController.text.trim()) != null;
+        int.tryParse(_priceController.text.trim()) != null &&
+        _codeController.text.trim().isNotEmpty;
   }
 
   Future<void> _saveFine() async {
@@ -56,13 +62,26 @@ class _FineEditScreenState extends State<FineEditScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final request = CreateFineRequest(
-        name: _nameController.text.trim(),
-        price: int.parse(_priceController.text.trim()) * 100,
-        type: _selectedType,
-      );
+      final isEditing = widget.fine != null;
 
-      await _addFineUseCase.execute(request);
+      if (isEditing) {
+        final request = UpdateFineRequest(
+          id: widget.fine!.id,
+          name: _nameController.text.trim(),
+          price: int.parse(_priceController.text.trim()) * 100,
+          type: _selectedType,
+          code: _codeController.text.trim(),
+        );
+        await _updateFineUseCase.execute(request);
+      } else {
+        final request = CreateFineRequest(
+          name: _nameController.text.trim(),
+          price: int.parse(_priceController.text.trim()) * 100,
+          type: _selectedType,
+          code: _codeController.text.trim(),
+        );
+        await _addFineUseCase.execute(request);
+      }
 
       if (mounted) {
         Navigator.of(context).pop(true); // Возвращаем true для обновления списка
@@ -157,6 +176,21 @@ class _FineEditScreenState extends State<FineEditScreen> {
                         const SizedBox(width: 8),
                         const Text('₽', style: TextStyle(fontSize: 16)),
                       ],
+                    ),
+                  ),
+
+                  // Код
+                  CupertinoListTile(
+                    title: const Text('Код'),
+                    additionalInfo: SizedBox(
+                      width: 200,
+                      child: CupertinoTextField(
+                        controller: _codeController,
+                        placeholder: 'FINE_001',
+                        textAlign: TextAlign.end,
+                        decoration: null,
+                        onChanged: (_) => setState(() {}),
+                      ),
                     ),
                   ),
                 ],

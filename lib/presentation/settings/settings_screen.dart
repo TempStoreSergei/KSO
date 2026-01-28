@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/core/services/permissions_service.dart';
+import 'package:motel/core/services/token_service.dart';
 import 'package:motel/core/constants/permissions_mapping.dart';
 import 'package:motel/presentation/settings/telegram/telegram_settings_screen.dart';
 import 'package:motel/presentation/settings/about/about_screen.dart';
@@ -27,39 +28,62 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final PermissionsService _permissionsService = PermissionsService();
+  final TokenService _tokenService = TokenService();
+  
   String? _userRole;
   Map<String, bool> _permissions = {};
   bool _isLoadingPermissions = true;
-
+  
   @override
   void initState() {
     super.initState();
     _loadUserRole();
     _loadPermissions();
   }
+  
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   Future<void> _loadUserRole() async {
-    final role = await _permissionsService.getUserRole();
+    final role = await _tokenService.getUserRole();
     if (mounted) {
       setState(() => _userRole = role);
     }
   }
 
+  /// Получить читаемое название роли
+  String _getRoleDisplayName(String? role) {
+    switch (role) {
+      case 'admin':
+        return 'Администратор';
+      case 'operator':
+        return 'Оператор';
+      default:
+        return 'Гость';
+    }
+  }
+
   Future<void> _loadPermissions() async {
-    // Загружаем все необходимые права
+    await _permissionsService.fetchPermissions();
+
     final permissions = {
-      'screensaver': await _permissionsService.hasPermission(PermissionsMapping.screensaver),
-      'acquiring': await _permissionsService.hasPermission(PermissionsMapping.acquiring),
-      'billDispenser': await _permissionsService.hasPermission(PermissionsMapping.billDispenser),
-      'billAcceptor': await _permissionsService.hasPermission(PermissionsMapping.billAcceptor),
-      'shiftManagement': await _permissionsService.hasPermission(PermissionsMapping.shiftManagement),
-      'services': await _permissionsService.hasPermission(PermissionsMapping.services),
-      'fines': await _permissionsService.hasPermission(PermissionsMapping.fines),
-      'roomPrices': await _permissionsService.hasPermission(PermissionsMapping.roomPrices),
-      'transactions': await _permissionsService.hasPermission(PermissionsMapping.transactions),
-      'taxSettings': await _permissionsService.hasPermission(PermissionsMapping.taxSettings),
-      'changePassword': await _permissionsService.hasPermission(PermissionsMapping.changePassword),
-      'telegram': await _permissionsService.hasPermission(PermissionsMapping.telegram),
+      'screensaver': _permissionsService.hasPermission(_userRole, PermissionsMapping.screensaver),
+      'acquiring': _permissionsService.hasPermission(_userRole, PermissionsMapping.acquiring),
+      'billDispenser': _permissionsService.hasPermission(_userRole, PermissionsMapping.billDispenser),
+      'billAcceptor': _permissionsService.hasPermission(_userRole, PermissionsMapping.billAcceptor),
+      'shiftManagement': _permissionsService.hasPermission(_userRole, 'open_shift') ||
+                         _permissionsService.hasPermission(_userRole, 'close_shift') ||
+                         _permissionsService.hasPermission(_userRole, 'print_x_report') ||
+                         _permissionsService.hasPermission(_userRole, 'get_shift_status'),
+      'services': _permissionsService.hasPermission(_userRole, PermissionsMapping.services),
+      'fines': _permissionsService.hasPermission(_userRole, PermissionsMapping.fines),
+      'roomPrices': _permissionsService.hasPermission(_userRole, PermissionsMapping.roomPrices),
+      'transactions': _permissionsService.hasPermission(_userRole, PermissionsMapping.transactions),
+      'taxSettings': _permissionsService.hasPermission(_userRole, PermissionsMapping.taxSettings),
+      'changePassword': _permissionsService.hasPermission(_userRole, PermissionsMapping.changePassword),
+      'telegram': _permissionsService.hasPermission(_userRole, PermissionsMapping.telegram),
     };
 
     if (mounted) {
@@ -89,7 +113,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               // Закрываем диалог
               Navigator.of(ctx).pop();
 
-              // Очищаем cookies (выход из аккаунта)
+              // Удаляем токены (выход из аккаунта)
               await ApiClient.instance.logout();
 
               // Возвращаемся на главный экран (закрываем все экраны настроек)
@@ -290,6 +314,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             largeTitle: Text('Настройки'),
             automaticallyImplyLeading: false, // Убираем кнопку "назад"
           ),
+          
+          CupertinoSliverRefreshControl(
+             onRefresh: () async {
+               await _loadPermissions();
+             },
+          ),
 
           // Группируем все секции
           SliverMainAxisGroup(
@@ -314,7 +344,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                       title: const Text('Роль пользователя'),
                       trailing: Text(
-                        _permissionsService.getRoleDisplayName(_userRole),
+                        _getRoleDisplayName(_userRole),
                         style: const TextStyle(
                           color: CupertinoColors.systemGrey,
                           fontSize: 15,

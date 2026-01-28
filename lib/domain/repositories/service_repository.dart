@@ -13,6 +13,7 @@ abstract class ServiceRepository {
     required int tax,
     required bool isCountable,
     required bool isDuration,
+    required String code,
   });
 
   /// Обновляет существующую услугу.
@@ -24,6 +25,7 @@ abstract class ServiceRepository {
     required int tax,
     required bool isCountable,
     required bool isDuration,
+    required String code,
   });
 
   /// Удаляет услугу по ее ID.

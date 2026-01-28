@@ -9,6 +9,7 @@ class ServiceModel extends ServiceEntity {
     required super.tax,
     required super.isCountable,
     required super.isDuration,
+    required super.code,
   });
 
   // Фабричный конструктор для создания экземпляра из JSON
@@ -20,6 +21,7 @@ class ServiceModel extends ServiceEntity {
       tax: json['tax'] as int,
       isCountable: json['isCountable'] as bool,
       isDuration: json['isDuration'] as bool,
+      code: json['code'] as String? ?? '',
     );
   }
 
@@ -32,6 +34,7 @@ class ServiceModel extends ServiceEntity {
       'tax': tax,
       'isCountable': isCountable,
       'isDuration': isDuration,
+      'code': code,
     };
   }
 }

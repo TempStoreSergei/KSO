@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:motel/core/api/api_client.dart';
@@ -71,7 +69,7 @@ class LockScreen extends StatefulWidget {
   State<LockScreen> createState() => _LockScreenState();
 }
 
-class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
+class _LockScreenState extends State<LockScreen> {
   final ApiClient _apiClient = ApiClient.instance;
   final PageController _pageController = PageController();
 
@@ -79,10 +77,6 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   ScreensaverSettings? _settings;
   bool _isLoading = true;
 
-  double _slideProgress = 0.0;
-  double _dragOffset = 0.0;
-  late AnimationController _arrowAnimationController;
-  late Animation<double> _arrowAnimation;
   int _secretTapCount = 0;
   Timer? _secretTapTimer;
   late Timer _clockTimer;
@@ -106,18 +100,6 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
         });
       }
     });
-
-    _arrowAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    );
-    _arrowAnimation = Tween<double>(begin: 0, end: 5).animate(
-      CurvedAnimation(parent: _arrowAnimationController, curve: Curves.easeInOut),
-    )..addStatusListener((status) {
-      if (status == AnimationStatus.completed) _arrowAnimationController.reverse();
-      if (status == AnimationStatus.dismissed) _arrowAnimationController.forward();
-    });
-    _arrowAnimationController.forward();
   }
 
   Future<void> _loadScreensaverData() async {
@@ -164,7 +146,6 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   void dispose() {
     print("[LockScreen | dispose] Экран уничтожается, очищаем ресурсы.");
     _pageController.dispose();
-    _arrowAnimationController.dispose();
     _clockTimer.cancel();
     _secretTapTimer?.cancel();
     _pageChangeTimer?.cancel();
@@ -213,44 +194,20 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     _startPageChangeTimer();
   }
 
-  void _onPointerMove(PointerMoveEvent details, double sliderWidth) {
-    if (details.buttons == kPrimaryMouseButton) {
-      setState(() {
-        _slideProgress = (_slideProgress + details.delta.dx / sliderWidth).clamp(0.0, 1.0);
-        _dragOffset = _slideProgress * sliderWidth;
-      });
-    }
-  }
-
-  void _onPointerUp(PointerUpEvent details) {
-    if (_slideProgress > 0.8) {
-      print("[LockScreen | _onPointerUp] Экран разблокирован.");
-      _pageChangeTimer?.cancel();
-      Navigator.of(context).push(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => RoomBookingScreen(),
-          transitionDuration: const Duration(milliseconds: 600),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-        ),
-      ).then((_) {
-        if (mounted) _startPageChangeTimer();
-      });
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          setState(() {
-            _slideProgress = 0.0;
-            _dragOffset = 0.0;
-          });
-        }
-      });
-    } else {
-      setState(() {
-        _slideProgress = 0.0;
-        _dragOffset = 0.0;
-      });
-    }
+  void _onUnlockTap() {
+    print("[LockScreen | _onUnlockTap] Экран разблокирован.");
+    _pageChangeTimer?.cancel();
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => RoomBookingScreen(),
+        transitionDuration: const Duration(milliseconds: 600),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    ).then((_) {
+      if (mounted) _startPageChangeTimer();
+    });
   }
 
   void _handleSecretTap() {
@@ -269,10 +226,11 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
         if (mounted) _startPageChangeTimer();
       });
     } else {
-      _secretTapTimer = Timer(const Duration(seconds: 2), () {
+      _secretTapTimer = Timer(const Duration(milliseconds: 200), () {
         if (mounted) {
-          print("[LockScreen | _handleSecretTap] Таймер сброса счетчика сработал.");
+          print("[LockScreen | _handleSecretTap] Таймер сброса счетчика сработал. Переход к бронированию.");
           setState(() => _secretTapCount = 0);
+          _onUnlockTap();
         }
       });
     }
@@ -282,35 +240,35 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          _buildBackgroundContent(),
-          if (_settings?.showClock ?? true)
-            Center(
-              child: GestureDetector(
-                onTap: _handleSecretTap,
-                child: _buildHud(context),
+      body: GestureDetector(
+        onTap: _onUnlockTap,
+        behavior: HitTestBehavior.opaque,
+        child: Stack(
+          children: [
+            _buildBackgroundContent(),
+            if (_settings?.showClock ?? true)
+              Center(
+                child: GestureDetector(
+                  onTap: _handleSecretTap,
+                  behavior: HitTestBehavior.opaque,
+                  child: _buildHud(context),
+                ),
+              ),
+            Positioned(
+              bottom: 60,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 500),
+                  child: IgnorePointer(
+                    child: _buildUnlockButton(),
+                  ),
+                ),
               ),
             ),
-          Positioned(
-            bottom: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 500),
-                child: LayoutBuilder(builder: (context, constraints) {
-                  final sliderWidth = constraints.maxWidth - 80;
-                  return Listener(
-                    onPointerMove: (event) => _onPointerMove(event, sliderWidth),
-                    onPointerUp: _onPointerUp,
-                    child: _buildSlideToUnlock(sliderWidth),
-                  );
-                }),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -393,82 +351,28 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSlideToUnlock(double sliderWidth) {
+  Widget _buildUnlockButton() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 40),
       height: 60,
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
+        color: Colors.white.withOpacity(0.3),
         borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
       ),
-      child: Stack(
-        alignment: Alignment.centerLeft,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 100),
-            width: _dragOffset + 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.4),
-              borderRadius: BorderRadius.circular(30),
-            ),
+      child: Center(
+        child: Text(
+          'Нажми на меня!',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            shadows: const [
+              Shadow(blurRadius: 5, color: Colors.black54),
+            ],
           ),
-          Center(
-            child: ShaderMask(
-              shaderCallback: (bounds) => LinearGradient(
-                colors: const [Colors.white24, Colors.white, Colors.white24],
-                stops: const [0.0, 0.5, 1.0],
-                transform: _SlideGradientTransform(_slideProgress),
-              ).createShader(bounds),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AnimatedBuilder(
-                    animation: _arrowAnimation,
-                    builder: (context, child) => Transform.translate(
-                      offset: Offset(_arrowAnimation.value, 0),
-                      child: const Row(children: [
-                        Icon(CupertinoIcons.chevron_right, color: Colors.white, size: 24),
-                        Icon(CupertinoIcons.chevron_right, color: Colors.white, size: 24),
-                      ]),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Потяни для разблокировки',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: _dragOffset,
-            child: Container(
-              width: 60,
-              height: 60,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(CupertinoIcons.arrow_right, color: Colors.black54),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
-}
-
-class _SlideGradientTransform extends GradientTransform {
-  final double progress;
-  const _SlideGradientTransform(this.progress);
-
-  @override
-  Matrix4? transform(ui.Rect bounds, {ui.TextDirection? textDirection}) =>
-      Matrix4.translationValues(bounds.width * progress * 2 - bounds.width, 0.0, 0.0);
 }

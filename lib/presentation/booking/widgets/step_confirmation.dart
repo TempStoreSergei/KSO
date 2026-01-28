@@ -3,9 +3,8 @@
 // ============================================
 
 import 'package:flutter/cupertino.dart';
-import 'package:motel/core/api/api_client.dart';
 import 'package:motel/domain/models/booking_models.dart';
-import 'package:motel/domain/usecases/save_transaction_usecase.dart';
+import 'package:motel/presentation/booking/formatters/ru_phone.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 import 'package:intl/intl.dart';
 
@@ -26,8 +25,6 @@ class StepConfirmation extends StatefulWidget {
 }
 
 class _StepConfirmationState extends State<StepConfirmation> {
-  bool _isLoading = false;
-
   Future<void> _submit() async {
     // Больше не отправляем API запрос отсюда
     widget.onSuccess();
@@ -53,6 +50,7 @@ class _StepConfirmationState extends State<StepConfirmation> {
                 _buildInfoRow('Корпус:', widget.data.selectedBuilding?.name ?? 'Не выбран'),
                 _buildInfoRow('Комната:', widget.data.selectedRoom?.name ?? 'Не выбрана'),
                 _buildInfoRow('Гость:', '${widget.data.lastName} ${widget.data.firstName}'),
+                _buildInfoRow('Телефон:', (widget.data.phoneNumber ?? '').isNotEmpty ? formatRuPhone(widget.data.phoneNumber!) : '—'),
                 const SizedBox(height: 12),
                 _buildInfoRow('Категория:', _getCategoryName(widget.data.selectedCategory)),
                 if (widget.data.selectedCategory == BookingCategory.accommodation) ...[
@@ -100,18 +98,16 @@ class _StepConfirmationState extends State<StepConfirmation> {
 
           CupertinoButton(
             color: CupertinoColors.activeBlue,
-            onPressed: _isLoading ? null : _submit,
+            onPressed: _submit,
             borderRadius: BorderRadius.circular(12),
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: SizedBox(
               width: double.infinity,
               child: Center(
-                child: _isLoading
-                    ? const CupertinoActivityIndicator(color: CupertinoColors.white)
-                    : const Text(
-                        'Подтвердить и оплатить',
-                        style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.bold, fontSize: 17),
-                      ),
+                child: const Text(
+                  'Подтвердить и оплатить',
+                  style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                ),
               ),
             ),
           ),

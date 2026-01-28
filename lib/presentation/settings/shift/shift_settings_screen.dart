@@ -3,8 +3,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:motel/core/api/api_client.dart';
-import 'package:motel/core/constants/permissions_mapping.dart';
-import 'package:motel/presentation/widgets/permission_widget.dart';
+import 'package:motel/presentation/helpers/permission_protected_screen.dart';
 import 'package:motel/presentation/settings/shift/cubit/shift_cubit.dart';
 import 'package:motel/presentation/settings/shift/cubit/shift_state.dart';
 import 'package:motel/presentation/settings/shift/models/shift_settings.dart';
@@ -16,9 +15,13 @@ class ShiftSettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => ShiftCubit(ApiClient.instance)..loadSettings(),
-      child: const _ShiftSettingsView(),
+    return PermissionProtectedScreen(
+      requiredPermissions: ['open_shift', 'close_shift', 'print_x_report', 'get_shift_status'],
+      title: 'Управление сменами',
+      child: BlocProvider(
+        create: (context) => ShiftCubit(ApiClient.instance)..loadSettings(),
+        child: const _ShiftSettingsView(),
+      ),
     );
   }
 }
@@ -115,26 +118,23 @@ class _ShiftSettingsView extends StatelessWidget {
   Widget _buildContent(BuildContext context, ShiftSettings settings) {
     return SliverMainAxisGroup(
       slivers: [
-        // Статус текущей смены (доступно всем)
+        // Статус текущей смены
         SliverToBoxAdapter(
           child: ShiftStatusSection(settings: settings),
         ),
 
         // Ручное управление
         SliverToBoxAdapter(
-          child: PermissionWidget(
-            permission: PermissionsMapping.shiftOpen,
-            child: ManualControlSection(
-              isShiftOpen: settings.shiftIsOpened,
-              onOpenShift: () {
-                context.read<ShiftCubit>().openShift();
-                _showSuccessDialog(context, 'Смена открыта');
-              },
-              onCloseShift: () {
-                context.read<ShiftCubit>().closeShift();
-                _showSuccessDialog(context, 'Смена закрыта');
-              },
-            ),
+          child: ManualControlSection(
+            isShiftOpen: settings.shiftData?.isOpen == true || settings.shiftData?.isExpired == true,
+            onOpenShift: () {
+              context.read<ShiftCubit>().openShift();
+              _showSuccessDialog(context, 'Смена открыта');
+            },
+            onCloseShift: () {
+              context.read<ShiftCubit>().closeShift();
+              _showSuccessDialog(context, 'Смена закрыта');
+            },
           ),
         ),
       ],

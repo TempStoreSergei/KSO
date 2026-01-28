@@ -37,12 +37,14 @@ class Fine {
   final String name;
   final int price;
   final FineType type;
+  final String code;
 
   Fine({
     required this.id,
     required this.name,
     required this.price,
     required this.type,
+    required this.code,
   });
 
   factory Fine.fromJson(Map<String, dynamic> json) {
@@ -51,6 +53,7 @@ class Fine {
       name: json['name'] as String,
       price: json['price'] as int,
       type: FineType.fromString(json['type'] as String),
+      code: json['code'] as String? ?? '',
     );
   }
 
@@ -60,6 +63,7 @@ class Fine {
       'name': name,
       'price': price,
       'type': type.value,
+      'code': code,
     };
   }
 
@@ -68,12 +72,14 @@ class Fine {
     String? name,
     int? price,
     FineType? type,
+    String? code,
   }) {
     return Fine(
       id: id ?? this.id,
       name: name ?? this.name,
       price: price ?? this.price,
       type: type ?? this.type,
+      code: code ?? this.code,
     );
   }
 }
@@ -83,11 +89,13 @@ class CreateFineRequest {
   final String name;
   final int price;
   final FineType type;
+  final String code;
 
   CreateFineRequest({
     required this.name,
     required this.price,
     required this.type,
+    required this.code,
   });
 
   Map<String, dynamic> toJson() {
@@ -95,6 +103,34 @@ class CreateFineRequest {
       'name': name,
       'price': price,
       'type': type.value,
+      'code': code,
+    };
+  }
+}
+
+/// Request модель для обновления штрафа
+class UpdateFineRequest {
+  final int id;
+  final String name;
+  final int price;
+  final FineType type;
+  final String code;
+
+  UpdateFineRequest({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.type,
+    required this.code,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'price': price,
+      'type': type.value,
+      'code': code,
     };
   }
 }

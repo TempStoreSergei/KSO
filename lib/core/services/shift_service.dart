@@ -148,10 +148,29 @@ class ShiftService {
         debugPrint('ShiftService: Получение статуса смены для устройства $deviceId');
       }
 
-      final response = await _apiClient.get(
+      var response = await _apiClient.get(
         '/fiscal/shift/status',
         params: {'device_id': deviceId},
       );
+
+      // Проверяем на ошибку соединения
+      if (response['success'] == false &&
+          response['message'] != null &&
+          response['message'].toString().contains('Соединение не установлено')) {
+        debugPrint('ShiftService: Обнаружена ошибка соединения. Попытка переподключения...');
+        
+        final connectionResult = await _establishConnection(deviceId);
+        if (connectionResult) {
+          debugPrint('ShiftService: Подключение восстановлено. Повторный запрос статуса...');
+          // Повторный запрос
+          response = await _apiClient.get(
+            '/fiscal/shift/status',
+            params: {'device_id': deviceId},
+          );
+        } else {
+          debugPrint('ShiftService: Не удалось восстановить подключение.');
+        }
+      }
 
       final status = ShiftStatus.fromJson(response);
       _lastShiftStatus = status;
@@ -167,6 +186,24 @@ class ShiftService {
         success: false,
         message: 'Ошибка получения статуса смены: $e',
       );
+    }
+  }
+
+  /// Попытка установить соединение с фискальным регистратором
+  Future<bool> _establishConnection(String deviceId) async {
+    try {
+      await _apiClient.post(
+        '/fiscal/connection/open?device_id=$deviceId',
+        body: {
+          "settings": {
+            "additionalProp1": {}
+          }
+        },
+      );
+      return true;
+    } catch (e) {
+      debugPrint('ShiftService: Ошибка установки соединения: $e');
+      return false;
     }
   }
 

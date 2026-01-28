@@ -8,6 +8,7 @@ class ServiceEntity extends Equatable {
   final int tax;
   final bool isCountable;
   final bool isDuration;
+  final String code;
 
   const ServiceEntity({
     required this.id,
@@ -16,8 +17,9 @@ class ServiceEntity extends Equatable {
     required this.tax,
     required this.isCountable,
     required this.isDuration,
+    required this.code,
   });
 
   @override
-  List<Object?> get props => [id, name, price, tax, isCountable, isDuration];
+  List<Object?> get props => [id, name, price, tax, isCountable, isDuration, code];
 }

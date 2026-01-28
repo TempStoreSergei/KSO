@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
 
 class RoomPricesSettingsScreen extends StatefulWidget {
   const RoomPricesSettingsScreen({super.key});
@@ -26,7 +25,7 @@ class _RoomPricesSettingsScreenState extends State<RoomPricesSettingsScreen> {
     });
     try {
       final url = await ApiClient.instance.exportRoomPrices();
-      final response = await http.get(Uri.parse(url));
+      final response = await ApiClient.instance.getRawUrl(url);
 
       if (response.statusCode == 200) {
         final csvDataString = response.body;
@@ -66,7 +65,7 @@ class _RoomPricesSettingsScreenState extends State<RoomPricesSettingsScreen> {
         return;
       }
 
-      final response = await http.get(Uri.parse(url));
+      final response = await ApiClient.instance.getRawUrl(url);
 
       if (response.statusCode == 200) {
         final file = File(savePath);

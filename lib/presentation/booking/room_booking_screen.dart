@@ -167,16 +167,13 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
   }
 
   void _onBookingSuccess() {
-    print('DEBUG: _onBookingSuccess called');
     _inactivityManager.start(); // Включаем обратно режим бездействия
     _paymentDateTime = DateTime.now();
     _metricsService.recordSuccessfulPayment();
     context.read<BookingCubit>().markBookingSuccessful();
-    print('DEBUG: markBookingSuccessful called');
   }
 
   void _onPaymentError() {
-    print('DEBUG: _onPaymentError called');
     _inactivityManager.start(); // Включаем обратно режим бездействия
     context.read<BookingCubit>().setPaymentError();
   }
@@ -297,7 +294,8 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
                               padding: const EdgeInsets.only(bottom: 20.0, left: 20.0, right: 20.0),
                                                                                             child: CustomKeyboard(
                                                                                               onKeyPressed: _keyboardManager.keyboardNotifier.onKeyPressed,
-                                                                                              numpadOnly: currentStep == BookingStep.roomSelection,
+                                                                                              numpadOnly: currentStep == BookingStep.roomSelection ||
+                                                                                                  (currentStep == BookingStep.guestInfo && _keyboardManager.focusedFieldIndex == 3),
                                                                                             ),                            ),
                           ),
                         ),

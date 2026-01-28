@@ -1,0 +1,1 @@
+enum SendMode { single, multi }

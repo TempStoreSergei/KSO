@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/core/constants/permissions_mapping.dart';
 import 'package:motel/core/services/permissions_service.dart';
+import 'package:motel/core/services/token_service.dart';
 import 'package:motel/domain/models/fine_models.dart';
 import 'package:motel/domain/usecases/get_fines.dart';
 import 'package:motel/domain/usecases/delete_fine.dart';
@@ -23,6 +24,7 @@ class _FinesSettingsScreenState extends State<FinesSettingsScreen> {
   final _getFinesUseCase = GetFinesUseCase(ApiClient.instance);
   final _deleteFineUseCase = DeleteFineUseCase(ApiClient.instance);
   final _permissionsService = PermissionsService();
+  final _tokenService = TokenService();
 
   List<Fine>? _fines;
   bool _isLoading = false;
@@ -38,9 +40,10 @@ class _FinesSettingsScreenState extends State<FinesSettingsScreen> {
   }
 
   Future<void> _loadPermissions() async {
-    final canAdd = await _permissionsService.hasPermission(PermissionsMapping.finesAdd);
-    final canUpdate = await _permissionsService.hasPermission(PermissionsMapping.finesUpdate);
-    final canDelete = await _permissionsService.hasPermission(PermissionsMapping.finesDelete);
+    final role = await _tokenService.getUserRole();
+    final canAdd = _permissionsService.hasPermission(role, PermissionsMapping.finesAdd);
+    final canUpdate = _permissionsService.hasPermission(role, PermissionsMapping.finesUpdate);
+    final canDelete = _permissionsService.hasPermission(role, PermissionsMapping.finesDelete);
     if (mounted) {
       setState(() {
         _canAddFine = canAdd;

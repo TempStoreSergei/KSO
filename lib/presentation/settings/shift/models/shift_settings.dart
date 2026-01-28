@@ -22,15 +22,14 @@ class ShiftSettings {
   });
 
   factory ShiftSettings.fromJson(Map<String, dynamic> json) {
-    final shiftDataJson = json['shiftData'];
+    final shiftData = json['shiftData'] ?? {};
     return ShiftSettings(
-      autoShiftsIsEnable: shiftDataJson != null ? shiftDataJson['autoShiftIsEnabled'] ?? false : false,
-      autoShiftsTimeToOpen: shiftDataJson != null ? shiftDataJson['autoShiftsTimeToOpen']?.substring(0, 5) ?? '08:00' : '08:00',
-      autoShiftsTimeToClose: shiftDataJson != null ? shiftDataJson['autoShiftsTimeToClose']?.substring(0, 5) ?? '20:00' : '20:00',
-      shiftIsOpened: shiftDataJson != null ? shiftDataJson['shiftIsOpened'] ?? false : false,
-      shiftOpenedAt: shiftDataJson != null ? shiftDataJson['shiftOpenedAt'] : null,
-      shiftDuration: shiftDataJson != null ? shiftDataJson['shiftDuration'] : null,
-      shiftData: shiftDataJson != null ? ShiftData.fromJson(shiftDataJson) : null,
+      autoShiftsIsEnable: shiftData['autoShiftIsEnabled'] ?? false,
+      autoShiftsTimeToOpen: shiftData['autoShiftsTimeToOpen']?.substring(0, 5) ?? '08:00',
+      autoShiftsTimeToClose: shiftData['autoShiftsTimeToClose']?.substring(0, 5) ?? '20:00',
+      shiftIsOpened: shiftData['shiftIsOpened'] ?? false,
+      shiftOpenedAt: shiftData['shiftOpenedAt'],
+      shiftDuration: shiftData['shiftDuration'],
     );
   }
 

@@ -28,7 +28,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     // Вычисляем общую сумму
     final roomTotalPrice = widget.transaction.room.totalPrice ?? 0;
     final servicesTotalPrice = widget.transaction.services.fold<int>(0, (sum, service) => sum + service.totalPrice);
-    final totalPrice = roomTotalPrice + servicesTotalPrice;
+    final finesTotalPrice = widget.transaction.fines.fold<int>(0, (sum, fine) => sum + fine.totalPrice);
+    final totalPrice = roomTotalPrice + servicesTotalPrice + finesTotalPrice;
 
     final roomTypeMap = {
       'fourBed': '4 места',
@@ -135,8 +136,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     header: const Text('ШТРАФЫ'),
                     children: widget.transaction.fines.map((fine) {
                       return CupertinoListTile(
-                        title: Text('Штраф #${fine.id}'),
-                        subtitle: Text('Кол-во: ${fine.count}'),
+                        title: Text((fine.name).trim().isEmpty ? 'Штраф #${fine.id}' : fine.name),
+                        subtitle: Text('Код: ${fine.fineCode} | ${fine.price ~/ 100} ₽ × ${fine.count}'),
+                        additionalInfo: Text(
+                          '${fine.totalPrice ~/ 100} ₽',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       );
                     }).toList(),
                   ),

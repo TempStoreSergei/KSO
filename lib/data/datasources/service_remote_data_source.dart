@@ -4,8 +4,8 @@ import 'package:motel/data/models/service_model.dart';
 /// Абстракция для удаленного источника данных об услугах.
 abstract class ServiceRemoteDataSource {
   Future<List<ServiceModel>> getServices();
-  Future<void> createService({required String name, int? price, required int tax, required bool isCountable, required bool isDuration});
-  Future<void> updateService({required String serviceID, required String name, int? price, required int tax, required bool isCountable, required bool isDuration});
+  Future<void> createService({required String name, int? price, required int tax, required bool isCountable, required bool isDuration, required String code});
+  Future<void> updateService({required String serviceID, required String name, int? price, required int tax, required bool isCountable, required bool isDuration, required String code});
   Future<void> deleteService({required String serviceID});
 }
 
@@ -23,7 +23,7 @@ class ServiceRemoteDataSourceImpl implements ServiceRemoteDataSource {
   }
 
   @override
-  Future<void> createService({required String name, int? price, required int tax, required bool isCountable, required bool isDuration}) async {
+  Future<void> createService({required String name, int? price, required int tax, required bool isCountable, required bool isDuration, required String code}) async {
     await apiClient.post(
       '/services/add_services',
       body: {
@@ -32,12 +32,13 @@ class ServiceRemoteDataSourceImpl implements ServiceRemoteDataSource {
         'tax': tax,
         'isCountable': isCountable,
         'isDuration': isDuration,
+        'code': code,
       },
     );
   }
 
   @override
-  Future<void> updateService({required String serviceID, required String name, int? price, required int tax, required bool isCountable, required bool isDuration}) async {
+  Future<void> updateService({required String serviceID, required String name, int? price, required int tax, required bool isCountable, required bool isDuration, required String code}) async {
     await apiClient.put(
       '/services/update_service',
       body: {
@@ -47,6 +48,7 @@ class ServiceRemoteDataSourceImpl implements ServiceRemoteDataSource {
         'tax': tax,
         'isCountable': isCountable,
         'isDuration': isDuration,
+        'code': code,
       },
     );
   }

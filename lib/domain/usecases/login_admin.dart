@@ -9,7 +9,7 @@ class LoginAdmin {
 
   LoginAdmin(this.repository);
 
-  Future<bool> call(String username, String password) async {
+  Future<LoginResponse> call(String username, String password) async {
     return await repository.login(username, password);
   }
 }
