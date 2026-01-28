@@ -68,10 +68,15 @@ class KeyboardManager {
   }
 
   /// Регистрация полей для клавиатуры
-  void registerFields({required List<TextEditingController> controllers, required List<FocusNode> focusNodes}) {
+  void registerFields({
+    required List<TextEditingController> controllers,
+    required List<FocusNode> focusNodes,
+    int? phoneFieldIndex,
+  }) {
     keyboardNotifier.registerFields(
       controllers: controllers,
       focusNodes: focusNodes,
+      phoneFieldIndex: phoneFieldIndex,
     );
   }
 

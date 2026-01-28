@@ -141,6 +141,7 @@ class _StepPeriodState extends State<StepPeriod> {
     }
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: isBeforeToday ? null : () => _onDateSelected(day),
       child: Container(
         alignment: Alignment.center,
@@ -152,6 +153,7 @@ class _StepPeriodState extends State<StepPeriod> {
           day.day.toString(),
           style: TextStyle(
             color: textColor,
+            fontSize: 18,
             fontWeight: isStartDate || isEndDate ? FontWeight.bold : FontWeight.normal,
           ),
         ),

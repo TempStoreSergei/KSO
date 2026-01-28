@@ -127,31 +127,43 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
     }
 
     if (newStep == BookingStep.guestInfo) {
-      _keyboardManager.registerFields(controllers: [
-        _keyboardManager.lastNameController,
-        _keyboardManager.firstNameController,
-        _keyboardManager.middleNameController,
-        _keyboardManager.phoneNumberController,
-      ], focusNodes: [
-        _keyboardManager.lastNameFocusNode,
-        _keyboardManager.firstNameFocusNode,
-        _keyboardManager.middleNameFocusNode,
-        _keyboardManager.phoneNumberFocusNode,
-      ]);
+      _keyboardManager.registerFields(
+        controllers: [
+          _keyboardManager.lastNameController,
+          _keyboardManager.firstNameController,
+          _keyboardManager.middleNameController,
+          _keyboardManager.phoneNumberController,
+        ],
+        focusNodes: [
+          _keyboardManager.lastNameFocusNode,
+          _keyboardManager.firstNameFocusNode,
+          _keyboardManager.middleNameFocusNode,
+          _keyboardManager.phoneNumberFocusNode,
+        ],
+        phoneFieldIndex: 3, // Индекс поля телефона
+      );
       _keyboardManager.focusFirstField();
     } else if (newStep == BookingStep.roomSelection) {
-      _keyboardManager.registerFields(controllers: [
-        _keyboardManager.roomSearchController,
-      ], focusNodes: [
-        _keyboardManager.roomSearchFocusNode,
-      ]);
+      _keyboardManager.registerFields(
+        controllers: [
+          _keyboardManager.roomSearchController,
+        ],
+        focusNodes: [
+          _keyboardManager.roomSearchFocusNode,
+        ],
+        phoneFieldIndex: null,
+      );
       _keyboardManager.roomSearchFocusNode.requestFocus();
     } else if (newStep == BookingStep.itemSelection) {
-      _keyboardManager.registerFields(controllers: [
-        _keyboardManager.itemSearchController,
-      ], focusNodes: [
-        _keyboardManager.itemSearchFocusNode,
-      ]);
+      _keyboardManager.registerFields(
+        controllers: [
+          _keyboardManager.itemSearchController,
+        ],
+        focusNodes: [
+          _keyboardManager.itemSearchFocusNode,
+        ],
+        phoneFieldIndex: null,
+      );
       _keyboardManager.itemSearchFocusNode.requestFocus();
     }
   }

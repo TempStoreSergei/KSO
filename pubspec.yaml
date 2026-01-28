@@ -53,6 +53,7 @@ dependencies:
   web_socket_channel: ^3.0.3
   flutter_svg: ^2.2.0
   csv: ^5.1.1
+  mask_text_input_formatter: ^2.9.0
 
 dev_dependencies:
   flutter_test:

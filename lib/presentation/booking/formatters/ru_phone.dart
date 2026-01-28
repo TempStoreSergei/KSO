@@ -33,8 +33,10 @@ String formatRuPhone(String input) {
   }
   if (d.length > 11) d = d.substring(0, 11);
 
+  // Если только "7" или меньше - возвращаем пустую строку (разрешаем полное удаление)
+  if (d.length <= 1) return '';
+
   final buf = StringBuffer('+7');
-  if (d.length <= 1) return buf.toString();
 
   final aEnd = d.length.clamp(1, 4);
   final a = d.substring(1, aEnd);
@@ -65,10 +67,48 @@ class RuPhoneTextInputFormatter extends TextInputFormatter {
 
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    // Извлекаем только цифры
+    final digits = newValue.text.replaceAll(RegExp(r'\D+'), '');
+
+    // Если пусто, возвращаем пустое значение
+    if (digits.isEmpty) {
+      return const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+    }
+
+    // Форматируем
     final formatted = formatRuPhone(newValue.text);
+
+    // Подсчитываем количество цифр до позиции курсора в старом значении
+    final oldDigitsBeforeCursor = oldValue.text
+        .substring(0, oldValue.selection.start)
+        .replaceAll(RegExp(r'\D+'), '')
+        .length;
+
+    // Находим позицию курсора в новом отформатированном тексте
+    int newCursorPos = 0;
+    int digitCount = 0;
+
+    for (int i = 0; i < formatted.length; i++) {
+      if (RegExp(r'\d').hasMatch(formatted[i])) {
+        digitCount++;
+        if (digitCount > oldDigitsBeforeCursor) {
+          newCursorPos = i;
+          break;
+        }
+      }
+    }
+
+    // Если цифры закончились, курсор в конец
+    if (digitCount <= oldDigitsBeforeCursor) {
+      newCursorPos = formatted.length;
+    }
+
     return TextEditingValue(
       text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
+      selection: TextSelection.collapsed(offset: newCursorPos),
     );
   }
 }
