@@ -166,18 +166,20 @@ class _StepPeriodState extends State<StepPeriod> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         CupertinoButton(
-          padding: EdgeInsets.zero,
+          padding: const EdgeInsets.all(12),
+          minSize: 44,
           onPressed: () => _changeMonth(-1),
-          child: const Icon(CupertinoIcons.chevron_left, color: CupertinoColors.systemGrey),
+          child: const Icon(CupertinoIcons.chevron_left, color: CupertinoColors.systemGrey, size: 24),
         ),
         Text(
           MaterialLocalizations.of(context).formatMonthYear(_displayMonth),
-          style: const TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          style: const TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         CupertinoButton(
-          padding: EdgeInsets.zero,
+          padding: const EdgeInsets.all(12),
+          minSize: 44,
           onPressed: () => _changeMonth(1),
-          child: const Icon(CupertinoIcons.chevron_right, color: CupertinoColors.systemGrey),
+          child: const Icon(CupertinoIcons.chevron_right, color: CupertinoColors.systemGrey, size: 24),
         ),
       ],
     );

@@ -347,19 +347,19 @@ class _StepItemSelectionState extends State<StepItemSelection> {
         children: [
           CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: 30,
+            minSize: 44,
             onPressed: () => _updateItemQuantity(selectedItem, selectedItem.quantity - 1),
             child: Container(
-              width: 30,
-              height: 30,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: const Color(0xFF2C2C2E),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
                 CupertinoIcons.minus,
                 color: CupertinoColors.white,
-                size: 18,
+                size: 20,
               ),
             ),
           ),
@@ -369,26 +369,26 @@ class _StepItemSelectionState extends State<StepItemSelection> {
               '${selectedItem.quantity}',
               style: const TextStyle(
                 color: CupertinoColors.white,
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
           CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: 30,
+            minSize: 44,
             onPressed: () => _updateItemQuantity(selectedItem, selectedItem.quantity + 1),
             child: Container(
-              width: 30,
-              height: 30,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: CupertinoColors.activeBlue,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
                 CupertinoIcons.plus,
                 color: CupertinoColors.white,
-                size: 18,
+                size: 20,
               ),
             ),
           ),
@@ -403,7 +403,7 @@ class _StepItemSelectionState extends State<StepItemSelection> {
       color: isSelected
           ? CupertinoColors.activeBlue
           : CupertinoColors.systemGrey,
-      size: 24,
+      size: 28,
     );
   }
 }
