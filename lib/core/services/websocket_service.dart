@@ -37,7 +37,7 @@ class WebSocketService extends ChangeNotifier {
 
   // Получаем WebSocket URL из .env
   String get _wsUrl {
-    final baseUrl = dotenv.env['BASE_URL'] ?? 'http://192.168.0.99:8005/api/v1';
+    final baseUrl = dotenv.env['BASE_URL'];
     final uri = Uri.parse(baseUrl);
     return 'ws://${uri.host}:${uri.port}/ws';
   }

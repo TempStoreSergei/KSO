@@ -79,8 +79,6 @@ class _LockScreenState extends State<LockScreen> {
 
   int _secretTapCount = 0;
   Timer? _secretTapTimer;
-  late Timer _clockTimer;
-  late DateTime _currentTime;
 
   Timer? _pageChangeTimer;
   int _currentPage = 0;
@@ -91,15 +89,6 @@ class _LockScreenState extends State<LockScreen> {
     print("[LockScreen | initState] Экран инициализируется...");
 
     _loadScreensaverData();
-
-    _currentTime = DateTime.now();
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          _currentTime = DateTime.now();
-        });
-      }
-    });
   }
 
   Future<void> _loadScreensaverData() async {
@@ -146,7 +135,6 @@ class _LockScreenState extends State<LockScreen> {
   void dispose() {
     print("[LockScreen | dispose] Экран уничтожается, очищаем ресурсы.");
     _pageController.dispose();
-    _clockTimer.cancel();
     _secretTapTimer?.cancel();
     _pageChangeTimer?.cancel();
     super.dispose();
@@ -251,7 +239,7 @@ class _LockScreenState extends State<LockScreen> {
                 child: GestureDetector(
                   onTap: _handleSecretTap,
                   behavior: HitTestBehavior.opaque,
-                  child: _buildHud(context),
+                  child: _ClockWidget(),
                 ),
               ),
             Positioned(
@@ -275,7 +263,6 @@ class _LockScreenState extends State<LockScreen> {
 
   Widget _buildBackgroundContent() {
     if (_isLoading) {
-      print("[LockScreen | _buildBackgroundContent] Состояние: ЗАГРУЗКА.");
       return const Center(
         child: CupertinoActivityIndicator(radius: 20, color: Colors.white),
       );
@@ -283,7 +270,6 @@ class _LockScreenState extends State<LockScreen> {
 
     // Если заставка выключена или нет файлов - показываем заглушку
     if (_settings?.isEnable == false || _files == null || _files!.isEmpty) {
-      print("[LockScreen | _buildBackgroundContent] Заставка выключена или файлы отсутствуют. Показываю заглушку.");
       return _buildBackground('assets/images/hostel_social_area.jpg', isNetwork: false);
     }
 
@@ -315,11 +301,68 @@ class _LockScreenState extends State<LockScreen> {
     );
   }
 
-  Widget _buildHud(BuildContext context) {
+  Widget _buildUnlockButton() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 40),
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+      ),
+      child: Center(
+        child: Text(
+          'Нажми на меня!',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            shadows: const [
+              Shadow(blurRadius: 5, color: Colors.black54),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Отдельный виджет для часов с собственным состоянием
+class _ClockWidget extends StatefulWidget {
+  @override
+  State<_ClockWidget> createState() => _ClockWidgetState();
+}
+
+class _ClockWidgetState extends State<_ClockWidget> {
+  late Timer _clockTimer;
+  late DateTime _currentTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentTime = DateTime.now();
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentTime = DateTime.now();
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
     final formattedTime = DateFormat('HH:mm').format(_currentTime);
     final formattedDate = DateFormat('EEEE, d MMMM', 'ru').format(_currentTime);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -348,31 +391,6 @@ class _LockScreenState extends State<LockScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildUnlockButton() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 40),
-      height: 60,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
-      ),
-      child: Center(
-        child: Text(
-          'Нажми на меня!',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            shadows: const [
-              Shadow(blurRadius: 5, color: Colors.black54),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
