@@ -199,22 +199,7 @@ class _StepPaymentState extends State<StepPayment> {
               padding: const EdgeInsets.only(left: 16.0),
             ),
 
-            // Первый способ оплаты - СБП
-            _buildMethodRow(
-              title: 'СБП (Система быстрых платежей)',
-              subtitle: 'Оплата по QR-коду через банковское приложение',
-              icon: CupertinoIcons.qrcode,
-              isSelected: widget.selectedMethod == 'СБП',
-              onTap: () => widget.onMethodSelected('СБП'),
-            ),
-
-            // Разделитель
-            const Padding(
-              padding: EdgeInsets.only(left: 16.0),
-              child: Divider(height: 1, color: Color(0xFF2C2C2E)),
-            ),
-
-            // Второй способ оплаты - Карта
+            // Первый способ оплаты - Карта
             _buildMethodRow(
               title: 'Банковская карта (Эквайринг)',
               subtitle: 'Оплата через терминал Visa, MasterCard, Мир',

@@ -10,6 +10,7 @@ class TransactionTile extends StatelessWidget {
     required this.onInfo,
     required this.onSelect,
     this.onSelectBlocked,
+    this.onDelete,
     required this.selectionMode,
     required this.isSelected,
     required this.isValidated,
@@ -24,6 +25,7 @@ class TransactionTile extends StatelessWidget {
   final VoidCallback onInfo;
   final VoidCallback onSelect;
   final VoidCallback? onSelectBlocked;
+  final VoidCallback? onDelete;
   final bool selectionMode;
   final bool isSelected;
   final bool isValidated;
@@ -169,6 +171,14 @@ class TransactionTile extends StatelessWidget {
                 color: CupertinoColors.systemGrey,
                 onPressed: isProcessing ? null : onInfo,
               ),
+              if (onDelete != null) ...[
+                const SizedBox(width: 12),
+                _iconAction(
+                  icon: CupertinoIcons.trash,
+                  color: CupertinoColors.systemRed,
+                  onPressed: isProcessing ? null : onDelete,
+                ),
+              ],
             ],
           ),
         ],

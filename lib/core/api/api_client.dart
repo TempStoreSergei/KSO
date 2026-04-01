@@ -34,16 +34,21 @@ class ApiClient {
   }
 
   Future<void> init() async {
+    // .env всегда в приоритете
+    final envUrl = _readEnvBaseUrlOrNull();
+    if (envUrl != null && envUrl.isNotEmpty) {
+      _baseUrl = envUrl;
+      // Синхронизируем в SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('BASE_URL', envUrl);
+      return;
+    }
+
+    // Фоллбэк на сохранённый URL
     final prefs = await SharedPreferences.getInstance();
     final savedUrl = prefs.getString('BASE_URL');
     if (savedUrl != null && savedUrl.isNotEmpty) {
       _baseUrl = savedUrl;
-      return;
-    }
-
-    final envUrl = _readEnvBaseUrlOrNull();
-    if (envUrl != null && envUrl.isNotEmpty) {
-      _baseUrl = envUrl;
     }
   }
 

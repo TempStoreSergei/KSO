@@ -107,6 +107,43 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     await _sendTo1CInternal(transaction);
   }
 
+  Future<void> _deleteTransaction(Transaction transaction) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Удалить транзакцию?'),
+        content: Text(
+          'Транзакция #${transaction.id} будет удалена безвозвратно.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Отмена'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await ApiClient.instance.delete('/transactions/delete_transaction/${transaction.id}');
+      if (mounted) {
+        _showSuccess('Транзакция #${transaction.id} удалена');
+        _loadTransactions();
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Ошибка удаления: $e');
+      }
+    }
+  }
+
   Future<String?> _resolveClientIdForTransaction(
     Transaction transaction, {
     String? presetClientId,
@@ -752,6 +789,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             onSelectBlocked: () => _showError(t.sentSuccessfully
                                 ? 'Транзакция уже отправлена в 1С'
                                 : 'Сначала подтвердите номер телефона для этой транзакции'),
+                            onDelete: () => _deleteTransaction(t),
                             onEdit: () async {
                               if (_processingIds.contains(t.id)) return;
                               final result = await Navigator.of(context).push(

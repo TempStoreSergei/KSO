@@ -194,6 +194,54 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
     _showErrorDialog('Не удалось завершить бронирование.\n\n$message');
   }
 
+  void _showHardwareErrorDialog(String message, Future<bool> Function() retryPrint) {
+    final cubit = context.read<BookingCubit>();
+    showCupertinoDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Ошибка оборудования'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            const Icon(CupertinoIcons.exclamationmark_triangle_fill,
+                color: CupertinoColors.systemOrange, size: 48),
+            const SizedBox(height: 12),
+            Text(message),
+            const SizedBox(height: 8),
+            const Text(
+              'Платёж принят, но возникла проблема с оборудованием. Обратитесь к администратору.',
+              style: TextStyle(fontSize: 13, color: CupertinoColors.systemGrey),
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              final success = await retryPrint();
+              if (success) {
+                if (mounted) cubit.markBookingSuccessful();
+              } else {
+                if (mounted) _showHardwareErrorDialog('Повторная печать не удалась.', retryPrint);
+              }
+            },
+            child: const Text('Повторить печать'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              cubit.markBookingSuccessful();
+            },
+            child: const Text('Завершить без чека'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showErrorDialog(String message) {
     showCupertinoDialog(
       context: context,
@@ -499,13 +547,28 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
         return StepPaymentExecution(
           key: const ValueKey('payment_execution'),
           data: state.bookingData.data,
-          paymentMethod: state.bookingData.paymentMethod ?? 'СБП',
+          paymentMethod: state.bookingData.paymentMethod ?? 'Наличные',
           totalPrice: state.bookingData.totalPrice,
           webSocketService: _webSocketService,
           onPaymentComplete: _onBookingSuccess,
           onPaymentError: _onPaymentError,
+          onCancel: (state.bookingData.paymentMethod ?? 'Наличные') == 'Наличные'
+              ? () {
+                  _inactivityManager.start();
+                  _webSocketService.disconnect();
+                  final newIndex = state.steps.indexOf(BookingStep.payment);
+                  while (cubit.state.currentStepIndex > newIndex) {
+                    cubit.previousStep();
+                  }
+                }
+              : null,
+          onHardwareError: (message, retryPrint) {
+            _inactivityManager.start();
+            _webSocketService.disconnect();
+            _showHardwareErrorDialog(message, retryPrint);
+          },
           onPaymentTimeout: () {
-            _inactivityManager.start(); // Включаем обратно режим бездействия
+            _inactivityManager.start();
             _webSocketService.disconnect();
             showCupertinoDialog(
               context: context,

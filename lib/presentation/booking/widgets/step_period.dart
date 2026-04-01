@@ -20,30 +20,58 @@ class StepPeriod extends StatefulWidget {
 }
 
 class _StepPeriodState extends State<StepPeriod> {
+  static const int _maxNights = 31;
   DateTime? _startDate;
   DateTime? _endDate;
   late DateTime _displayMonth;
+  late final DateTime _today;
+  late final DateTime _minSelectableDate;
+  late final DateTime _maxSelectableDate;
 
   @override
   void initState() {
     super.initState();
     _startDate = widget.checkIn;
     _endDate = widget.checkOut;
+    _today = DateUtils.dateOnly(DateTime.now());
+    _minSelectableDate = DateUtils.addMonthsToMonthDate(_today, -1);
+    _maxSelectableDate = DateUtils.addMonthsToMonthDate(_today, 1);
     // Если даты не заданы, показываем текущий месяц
     final initialDate = widget.checkIn ?? DateTime.now();
     _displayMonth = DateTime(initialDate.year, initialDate.month);
   }
 
+  DateTime _dateOnly(DateTime date) => DateUtils.dateOnly(date);
+
+  bool _isSelectable(DateTime day) {
+    final d = _dateOnly(day);
+    return !d.isBefore(_minSelectableDate) && !d.isAfter(_maxSelectableDate);
+  }
+
+  bool _exceedsNightLimit(DateTime day) {
+    if (_startDate == null || _endDate != null) return false;
+    final selected = _dateOnly(day);
+    final start = _dateOnly(_startDate!);
+    if (!selected.isAfter(start)) return false;
+    return selected.difference(start).inDays > _maxNights;
+  }
+
   void _onDateSelected(DateTime day) {
+    final selectedDay = _dateOnly(day);
+    final start = _startDate == null ? null : _dateOnly(_startDate!);
+
     setState(() {
       if (_startDate == null || (_startDate != null && _endDate != null)) {
-        _startDate = day;
+        _startDate = selectedDay;
         _endDate = null;
       } else {
-        if (day.isAfter(_startDate!)) {
-          _endDate = day;
+        if (selectedDay.isAfter(start!)) {
+          if (selectedDay.difference(start).inDays > _maxNights) {
+            return;
+          }
+          _endDate = selectedDay;
         } else {
-          _startDate = day;
+          _startDate = selectedDay;
           _endDate = null;
         }
       }
@@ -54,8 +82,16 @@ class _StepPeriodState extends State<StepPeriod> {
   }
 
   void _changeMonth(int increment) {
+    final target = DateTime(_displayMonth.year, _displayMonth.month + increment);
+    final minMonth = DateTime(_minSelectableDate.year, _minSelectableDate.month);
+    final maxMonth = DateTime(_maxSelectableDate.year, _maxSelectableDate.month);
+
+    if (target.isBefore(minMonth) || target.isAfter(maxMonth)) {
+      return;
+    }
+
     setState(() {
-      _displayMonth = DateTime(_displayMonth.year, _displayMonth.month + increment);
+      _displayMonth = target;
     });
   }
 
@@ -104,9 +140,9 @@ class _StepPeriodState extends State<StepPeriod> {
 
               final dayNumber = index - startingWeekday + 2;
               final currentDate = DateTime(_displayMonth.year, _displayMonth.month, dayNumber);
-              final isBeforeToday = currentDate.isBefore(DateUtils.dateOnly(DateTime.now()));
+              final isDisabled = !_isSelectable(currentDate) || _exceedsNightLimit(currentDate);
 
-              return _buildDayCell(currentDate, isBeforeToday);
+              return _buildDayCell(currentDate, isDisabled);
             },
           ),
         ],
@@ -114,12 +150,12 @@ class _StepPeriodState extends State<StepPeriod> {
     );
   }
 
-  Widget _buildDayCell(DateTime day, bool isBeforeToday) {
+  Widget _buildDayCell(DateTime day, bool isDisabled) {
     bool isStartDate = _startDate != null && DateUtils.isSameDay(day, _startDate);
     bool isEndDate = _endDate != null && DateUtils.isSameDay(day, _endDate);
     bool isInRange = _startDate != null && _endDate != null && day.isAfter(_startDate!) && day.isBefore(_endDate!);
 
-    Color textColor = isBeforeToday ? CupertinoColors.systemGrey3 : CupertinoColors.white;
+    Color textColor = isDisabled ? CupertinoColors.systemGrey3 : CupertinoColors.white;
     Color? backgroundColor;
     BorderRadius? borderRadius;
 
@@ -142,7 +178,7 @@ class _StepPeriodState extends State<StepPeriod> {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: isBeforeToday ? null : () => _onDateSelected(day),
+      onTap: isDisabled ? null : () => _onDateSelected(day),
       child: Container(
         alignment: Alignment.center,
         margin: const EdgeInsets.symmetric(vertical: 4),
@@ -162,24 +198,37 @@ class _StepPeriodState extends State<StepPeriod> {
   }
 
   Widget _buildCalendarHeader() {
+    final minMonth = DateTime(_minSelectableDate.year, _minSelectableDate.month);
+    final maxMonth = DateTime(_maxSelectableDate.year, _maxSelectableDate.month);
+    final canGoPrev = _displayMonth.isAfter(minMonth);
+    final canGoNext = _displayMonth.isBefore(maxMonth);
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         CupertinoButton(
-          padding: const EdgeInsets.all(12),
-          minSize: 44,
-          onPressed: () => _changeMonth(-1),
-          child: const Icon(CupertinoIcons.chevron_left, color: CupertinoColors.systemGrey, size: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+          minimumSize: const Size(96, 52),
+          onPressed: canGoPrev ? () => _changeMonth(-1) : null,
+          child: Icon(
+            CupertinoIcons.chevron_left,
+            color: canGoPrev ? CupertinoColors.systemGrey : CupertinoColors.systemGrey3,
+            size: 24,
+          ),
         ),
         Text(
           MaterialLocalizations.of(context).formatMonthYear(_displayMonth),
           style: const TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         CupertinoButton(
-          padding: const EdgeInsets.all(12),
-          minSize: 44,
-          onPressed: () => _changeMonth(1),
-          child: const Icon(CupertinoIcons.chevron_right, color: CupertinoColors.systemGrey, size: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+          minimumSize: const Size(96, 52),
+          onPressed: canGoNext ? () => _changeMonth(1) : null,
+          child: Icon(
+            CupertinoIcons.chevron_right,
+            color: canGoNext ? CupertinoColors.systemGrey : CupertinoColors.systemGrey3,
+            size: 24,
+          ),
         ),
       ],
     );

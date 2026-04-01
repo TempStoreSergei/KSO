@@ -1,8 +1,5 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:motel/presentation/lock_screen/lock_screen.dart';
 
 class StepSuccess extends StatefulWidget {
   final int totalPrice;
@@ -18,14 +15,27 @@ class StepSuccess extends StatefulWidget {
   State<StepSuccess> createState() => _StepSuccessState();
 }
 
-class _StepSuccessState extends State<StepSuccess> {
+class _StepSuccessState extends State<StepSuccess> with SingleTickerProviderStateMixin {
   Timer? _timer;
+  int _countdown = 10;
+  late AnimationController _animController;
+  late Animation<double> _scaleAnim;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(seconds: 10), () {
-      if (mounted) {
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _scaleAnim = CurvedAnimation(parent: _animController, curve: Curves.elasticOut);
+    _animController.forward();
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() => _countdown--);
+      if (_countdown <= 0) {
+        timer.cancel();
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     });
@@ -34,36 +44,59 @@ class _StepSuccessState extends State<StepSuccess> {
   @override
   void dispose() {
     _timer?.cancel();
+    _animController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          CupertinoActivityIndicator(
-            radius: 24,
+          ScaleTransition(
+            scale: _scaleAnim,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: const Color(0xFF34C759).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                CupertinoIcons.checkmark_alt_circle_fill,
+                color: Color(0xFF34C759),
+                size: 80,
+              ),
+            ),
           ),
-          SizedBox(height: 32),
-          Text(
-            'Оплата прошла успешно',
+          const SizedBox(height: 32),
+          const Text(
+            'Спасибо за покупку!',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: CupertinoColors.white,
-              fontSize: 28,
+              color: Color(0xFF1C1C1E),
+              fontSize: 32,
               fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
-            'Сейчас вы будете перенаправлены',
+            'Оплата ${widget.totalPrice ~/ 100} ₽ прошла успешно',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               color: CupertinoColors.systemGrey,
-              fontSize: 16,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 40),
+          Text(
+            'Возврат на главный экран через $_countdown сек.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: CupertinoColors.systemGrey2,
+              fontSize: 15,
             ),
           ),
         ],

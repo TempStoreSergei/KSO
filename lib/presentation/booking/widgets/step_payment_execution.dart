@@ -17,6 +17,8 @@ class StepPaymentExecution extends StatefulWidget {
   final VoidCallback onPaymentComplete;
   final VoidCallback onPaymentError;
   final VoidCallback onPaymentTimeout;
+  final VoidCallback? onCancel;
+  final void Function(String message, Future<bool> Function() retryPrint)? onHardwareError;
 
   const StepPaymentExecution({
     super.key,
@@ -27,6 +29,8 @@ class StepPaymentExecution extends StatefulWidget {
     required this.onPaymentComplete,
     required this.onPaymentError,
     required this.onPaymentTimeout,
+    this.onCancel,
+    this.onHardwareError,
   });
 
   @override
@@ -39,14 +43,15 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   late int _totalSeconds;
   StreamSubscription? _socketSubscription;
   int _collectedAmount = 0; // Собранная сумма в копейках
+  bool _isCancelling = false;
+  bool _isDeviceReady = false;
 
   @override
   void initState() {
     super.initState();
     widget.webSocketService.connect();
-    _totalSeconds = widget.paymentMethod == 'Наличные' ? 600 : 120;
+    _totalSeconds = widget.paymentMethod == 'Наличные' ? 300 : 120;
     _remainingSeconds = _totalSeconds;
-    _startPaymentTimer();
     _listenToPaymentEvents();
     _startPayment();
   }
@@ -54,21 +59,48 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   Future<void> _startPayment() async {
     try {
       if (widget.paymentMethod == 'Наличные') {
-        // Запускаем прием наличных
         await ApiClient.instance.get(
           '/cash_system/start_accepting_payment',
           params: {'amount': widget.totalPrice},
         );
       } else if (widget.paymentMethod == 'Карта') {
-        // Запускаем оплату картой
         await ApiClient.instance.get(
           '/acquiring/start_payment',
           params: {'amount': widget.totalPrice},
         );
       }
+      // Устройство ответило — запускаем таймер
+      if (mounted) {
+        setState(() => _isDeviceReady = true);
+        _startPaymentTimer();
+      }
     } catch (e) {
       print('Ошибка запуска оплаты: $e');
-      widget.onPaymentError();
+      if (widget.onHardwareError != null) {
+        widget.onHardwareError!('Оборудование не отвечает: $e', () async => false);
+      } else {
+        widget.onPaymentError();
+      }
+    }
+  }
+
+  Future<void> _cancelPayment() async {
+    if (_isCancelling) return;
+    setState(() => _isCancelling = true);
+    try {
+      if (widget.paymentMethod == 'Наличные') {
+        await ApiClient.instance.get('/cash_system/stop_accepting_payment');
+      }
+      _paymentTimer?.cancel();
+      _socketSubscription?.cancel();
+      if (mounted) {
+        widget.onCancel?.call();
+      }
+    } catch (e) {
+      print('Ошибка отмены оплаты: $e');
+      if (mounted) {
+        setState(() => _isCancelling = false);
+      }
     }
   }
 
@@ -109,11 +141,29 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
         widget.onPaymentComplete();
       } else {
         print('DEBUG: Check printing failed');
-        widget.onPaymentError();
+        // Сохраняем транзакцию даже если чек не напечатался
+        try {
+          final useCase = SaveTransactionUseCase(ApiClient.instance);
+          await useCase.call(widget.data);
+        } catch (_) {}
+        if (widget.onHardwareError != null) {
+          widget.onHardwareError!('Не удалось напечатать чек. Обратитесь к администратору.', _printCheck);
+        } else {
+          widget.onPaymentError();
+        }
       }
     } catch (e) {
       print('DEBUG: Error in _handleSuccessfulPayment: $e');
-      widget.onPaymentError();
+      // Сохраняем транзакцию даже при ошибке оборудования
+      try {
+        final useCase = SaveTransactionUseCase(ApiClient.instance);
+        await useCase.call(widget.data);
+      } catch (_) {}
+      if (widget.onHardwareError != null) {
+        widget.onHardwareError!('Ошибка оборудования: $e', _printCheck);
+      } else {
+        widget.onPaymentError();
+      }
     }
   }
 
@@ -228,6 +278,44 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isDeviceReady) {
+      return StepContainer(
+        icon: _getPaymentIcon(),
+        title: _getPaymentTitle(),
+        subtitle: 'Сумма к оплате: ${widget.totalPrice ~/ 100} ₽',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 40),
+            const CupertinoActivityIndicator(radius: 20),
+            const SizedBox(height: 24),
+            const Text(
+              'Подключение к оборудованию...',
+              style: TextStyle(
+                color: CupertinoColors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Пожалуйста, подождите',
+              style: TextStyle(
+                color: CupertinoColors.systemGrey,
+                fontSize: 15,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (widget.onCancel != null) ...[
+              const SizedBox(height: 32),
+              _buildCancelButton(),
+            ],
+          ],
+        ),
+      );
+    }
+
     return StepContainer(
       icon: _getPaymentIcon(),
       title: _getPaymentTitle(),
@@ -238,7 +326,46 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
           _buildTimerSection(),
           const SizedBox(height: 24),
           _buildPaymentContent(),
+          if (widget.onCancel != null) ...[
+            const SizedBox(height: 24),
+            _buildCancelButton(),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildCancelButton() {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: _isCancelling ? null : _cancelPayment,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: CupertinoColors.systemRed.withValues(alpha: 0.5)),
+        ),
+        child: Center(
+          child: _isCancelling
+              ? const CupertinoActivityIndicator()
+              : const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(CupertinoIcons.chevron_back, color: CupertinoColors.systemRed, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Отменить оплату',
+                      style: TextStyle(
+                        color: CupertinoColors.systemRed,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
