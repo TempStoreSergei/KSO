@@ -192,10 +192,18 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
       });
     }
 
+    final fio = [
+      widget.data.lastName ?? '',
+      widget.data.firstName ?? '',
+      widget.data.middleName ?? '',
+    ].where((s) => s.isNotEmpty).join(' ');
+
     final checkData = {
       "items": items,
       "paymentType": _getPaymentTypeCode(widget.paymentMethod),
       "summ": widget.totalPrice,
+      "fio": fio,
+      "phoneNumber": widget.data.phoneNumber ?? '',
     };
 
     return await ApiClient.instance.printCheck(checkData);
