@@ -3,10 +3,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:motel/core/api/api_client.dart';
-import 'package:motel/presentation/booking/room_booking_screen.dart';
 import 'package:motel/presentation/admin_login/admin_login_screen.dart';
+import 'package:motel/presentation/booking/room_booking_screen.dart';
+import 'package:motel/presentation/info/info_screen.dart';
 
-// Модели данных
 class ScreensaverFile {
   final int id;
   final int order;
@@ -63,7 +63,7 @@ class ScreensaverSettings {
 }
 
 class LockScreen extends StatefulWidget {
-  LockScreen({super.key});
+  const LockScreen({super.key});
 
   @override
   State<LockScreen> createState() => _LockScreenState();
@@ -82,29 +82,22 @@ class _LockScreenState extends State<LockScreen> {
 
   Timer? _pageChangeTimer;
   int _currentPage = 0;
+  bool _isNavigating = false;
 
   @override
   void initState() {
     super.initState();
-    print("[LockScreen | initState] Экран инициализируется...");
-
     _loadScreensaverData();
   }
 
   Future<void> _loadScreensaverData() async {
     try {
-      print("[LockScreen | _loadScreensaverData] Начинаю загрузку данных заставки...");
-
-      // Загружаем файлы
       final filesResponse = await _apiClient.get('/screensaver/get_files');
       final filesList = (filesResponse['files'] as List)
           .map((json) => ScreensaverFile.fromJson(json))
           .toList();
-
-      // Сортируем по order
       filesList.sort((a, b) => a.order.compareTo(b.order));
 
-      // Загружаем настройки
       final settingsResponse = await _apiClient.get('/screensaver/get_settings');
       final settings = ScreensaverSettings.fromJson(settingsResponse);
 
@@ -115,14 +108,11 @@ class _LockScreenState extends State<LockScreen> {
           _isLoading = false;
         });
 
-        // Запускаем автопрокрутку если есть файлы и заставка включена
         if (filesList.isNotEmpty && settings.isEnable) {
-          print("[LockScreen | _loadScreensaverData] УСПЕХ. Загружено ${filesList.length} файлов. ЗАПУСКАЮ ТАЙМЕР.");
           _startPageChangeTimer();
         }
       }
     } catch (e) {
-      print("[LockScreen | _loadScreensaverData] Ошибка загрузки: $e");
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -133,7 +123,6 @@ class _LockScreenState extends State<LockScreen> {
 
   @override
   void dispose() {
-    print("[LockScreen | dispose] Экран уничтожается, очищаем ресурсы.");
     _pageController.dispose();
     _secretTapTimer?.cancel();
     _pageChangeTimer?.cancel();
@@ -145,22 +134,12 @@ class _LockScreenState extends State<LockScreen> {
 
     if (_files == null || _files!.isEmpty) return;
 
-    // Получаем текущий файл по индексу
     final currentFileIndex = _currentPage % _files!.length;
     final currentFile = _files![currentFileIndex];
-
-    // Используем время показа текущего файла
     final duration = Duration(seconds: currentFile.timeShowImage);
 
-    print("[LockScreen | _startPageChangeTimer] Устанавливаю таймер на ${currentFile.timeShowImage} секунд для файла #$currentFileIndex");
-
     _pageChangeTimer = Timer(duration, () {
-      if (_files == null || _files!.isEmpty || !mounted) {
-        return;
-      }
-
-      print("[LockScreen | _startPageChangeTimer] Таймер сработал! Переключаю страницу.");
-
+      if (_files == null || _files!.isEmpty || !mounted) return;
       _currentPage++;
 
       if (_pageController.hasClients) {
@@ -174,49 +153,90 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   void _onPageChanged(int page) {
-    print("[LockScreen | _onPageChanged] Страница изменена на: $page");
     setState(() {
       _currentPage = page;
     });
-    // Перезапускаем таймер с новым временем для нового файла
     _startPageChangeTimer();
   }
 
   void _onUnlockTap() {
-    print("[LockScreen | _onUnlockTap] Экран разблокирован.");
+    if (_isNavigating) return;
+    _isNavigating = true;
     _pageChangeTimer?.cancel();
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => RoomBookingScreen(),
-        transitionDuration: const Duration(milliseconds: 600),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-      ),
-    ).then((_) {
-      if (mounted) _startPageChangeTimer();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        _isNavigating = false;
+        return;
+      }
+
+      Navigator.of(context)
+          .push(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => RoomBookingScreen(),
+              transitionDuration: const Duration(milliseconds: 600),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+            ),
+          )
+          .then((_) {
+            _isNavigating = false;
+            if (mounted) _startPageChangeTimer();
+          });
+    });
+  }
+
+  void _openInfoScreen() {
+    if (_isNavigating) return;
+    _isNavigating = true;
+    _pageChangeTimer?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        _isNavigating = false;
+        return;
+      }
+
+      Navigator.of(context)
+          .push(
+            CupertinoPageRoute(builder: (_) => const InfoScreen()),
+          )
+          .then((_) {
+            _isNavigating = false;
+            if (mounted && (_files?.isNotEmpty ?? false) && (_settings?.isEnable ?? false)) {
+              _startPageChangeTimer();
+            }
+          });
     });
   }
 
   void _handleSecretTap() {
     _secretTapTimer?.cancel();
     setState(() => _secretTapCount++);
-    print("[LockScreen | _handleSecretTap] Секретное нажатие! Счетчик: $_secretTapCount");
 
     if (_secretTapCount >= 5) {
+      if (_isNavigating) return;
+      _isNavigating = true;
       _secretTapTimer?.cancel();
       _secretTapCount = 0;
-      print("[LockScreen | _handleSecretTap] Вход в админ-панель активирован.");
       _pageChangeTimer?.cancel();
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
-      ).then((_) {
-        if (mounted) _startPageChangeTimer();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          _isNavigating = false;
+          return;
+        }
+
+        Navigator.of(context)
+            .push(
+              MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
+            )
+            .then((_) {
+              _isNavigating = false;
+              if (mounted) _startPageChangeTimer();
+            });
       });
     } else {
       _secretTapTimer = Timer(const Duration(milliseconds: 200), () {
         if (mounted) {
-          print("[LockScreen | _handleSecretTap] Таймер сброса счетчика сработал. Переход к бронированию.");
           setState(() => _secretTapCount = 0);
           _onUnlockTap();
         }
@@ -228,31 +248,70 @@ class _LockScreenState extends State<LockScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: _onUnlockTap,
-        behavior: HitTestBehavior.opaque,
-        child: Stack(
-          children: [
-            _buildBackgroundContent(),
-            if (_settings?.showClock ?? true)
-              Center(
-                child: GestureDetector(
-                  onTap: _handleSecretTap,
-                  behavior: HitTestBehavior.opaque,
-                  child: _ClockWidget(),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _onUnlockTap,
+              behavior: HitTestBehavior.opaque,
+              child: _buildBackgroundContent(),
+            ),
+          ),
+          if (_settings?.showClock ?? true)
+            Center(
+              child: GestureDetector(
+                onTap: _handleSecretTap,
+                behavior: HitTestBehavior.opaque,
+                child: const _ClockWidget(),
+              ),
+            ),
+          Positioned(
+            bottom: 24,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IgnorePointer(child: _buildUnlockButton()),
+                    const SizedBox(height: 12),
+                    _buildInfoButton(),
+                  ],
                 ),
               ),
-            Positioned(
-              bottom: 60,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 500),
-                  child: IgnorePointer(
-                    child: _buildUnlockButton(),
-                  ),
-                ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoButton() {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: _openInfoScreen,
+      child: Container(
+        height: 44,
+        margin: const EdgeInsets.symmetric(horizontal: 70),
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemGrey.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.45), width: 1.2),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(CupertinoIcons.info_circle_fill, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Информация',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
               ),
             ),
           ],
@@ -268,14 +327,13 @@ class _LockScreenState extends State<LockScreen> {
       );
     }
 
-    // Если заставка выключена или нет файлов - показываем заглушку
     if (_settings?.isEnable == false || _files == null || _files!.isEmpty) {
       return _buildBackground('assets/images/hostel_social_area.jpg', isNetwork: false);
     }
 
     return PageView.builder(
       controller: _pageController,
-      itemCount: null, // Бесконечная прокрутка
+      itemCount: null,
       onPageChanged: _onPageChanged,
       itemBuilder: (context, index) {
         final actualIndex = index % _files!.length;
@@ -285,17 +343,13 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   Widget _buildBackground(String path, {required bool isNetwork}) {
-    ImageProvider imageProvider = isNetwork ? NetworkImage(path) : AssetImage(path) as ImageProvider;
+    final ImageProvider imageProvider =
+        isNetwork ? NetworkImage(path) : AssetImage(path) as ImageProvider;
     return Container(
       decoration: BoxDecoration(
         image: DecorationImage(
           image: imageProvider,
           fit: BoxFit.cover,
-          onError: isNetwork
-              ? (exception, stackTrace) {
-            print("[LockScreen | _buildBackground] КРИТИЧЕСКАЯ ОШИБКА при загрузке сетевого изображения: $path. Ошибка: $exception");
-          }
-              : null,
         ),
       ),
     );
@@ -306,18 +360,18 @@ class _LockScreenState extends State<LockScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 40),
       height: 60,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.3),
+        color: Colors.white.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
       ),
-      child: Center(
+      child: const Center(
         child: Text(
           'Нажми на меня!',
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.w600,
-            shadows: const [
+            shadows: [
               Shadow(blurRadius: 5, color: Colors.black54),
             ],
           ),
@@ -327,8 +381,9 @@ class _LockScreenState extends State<LockScreen> {
   }
 }
 
-// Отдельный виджет для часов с собственным состоянием
 class _ClockWidget extends StatefulWidget {
+  const _ClockWidget();
+
   @override
   State<_ClockWidget> createState() => _ClockWidgetState();
 }
