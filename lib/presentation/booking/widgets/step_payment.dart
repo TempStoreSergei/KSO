@@ -49,6 +49,10 @@ class _StepPaymentState extends State<StepPayment> {
   Future<void> _loadPaymentMethods() async {
     final requestVersion = ++_requestVersion;
 
+    if (widget.selectedMethod != null) {
+      widget.onMethodSelected(null);
+    }
+
     if (mounted) {
       setState(() {
         _isLoadingMethods = true;
@@ -307,6 +311,8 @@ class _StepPaymentState extends State<StepPayment> {
 
   @override
   Widget build(BuildContext context) {
+    final paymentMethodRows = _buildPaymentMethodRows();
+
     return StepContainer(
       icon: CupertinoIcons.creditcard_fill,
       title: 'Способ оплаты',
@@ -354,7 +360,7 @@ class _StepPaymentState extends State<StepPayment> {
                 padding: EdgeInsets.symmetric(vertical: 32),
                 child: CupertinoActivityIndicator(radius: 16),
               )
-            else if (_buildPaymentMethodRows().isEmpty)
+            else if (paymentMethodRows.isEmpty)
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 8, 16, 24),
                 child: Text(
@@ -367,7 +373,7 @@ class _StepPaymentState extends State<StepPayment> {
                 ),
               )
             else
-              ..._buildPaymentMethodRows(),
+              ...paymentMethodRows,
           ],
         ),
       ),
