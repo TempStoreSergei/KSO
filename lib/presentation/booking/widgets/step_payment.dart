@@ -5,11 +5,16 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/domain/models/system_settings.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
+
+const String _cardPaymentMethod = 'Карта';
+const String _sbpPaymentMethod = 'СБП';
+const String _cashPaymentMethod = 'Наличные';
 
 class StepPayment extends StatefulWidget {
   final String? selectedMethod;
-  final Function(String) onMethodSelected;
+  final ValueChanged<String?> onMethodSelected;
   final int totalPrice;
 
   const StepPayment({super.key, this.selectedMethod, required this.onMethodSelected, required this.totalPrice});
@@ -19,17 +24,97 @@ class StepPayment extends StatefulWidget {
 }
 
 class _StepPaymentState extends State<StepPayment> {
-  bool _isCheckingChange = true;
+  bool _isLoadingMethods = true;
+  bool _isAcquiringEnabled = true;
+  bool _isSbpEnabled = false;
+  bool _isCashSystemEnabled = true;
   bool _canGiveChange = true;
   String? _changeErrorMessage;
+  int _requestVersion = 0;
 
   @override
   void initState() {
     super.initState();
-    _checkChangeAvailability();
+    _loadPaymentMethods();
   }
 
-  Future<void> _checkChangeAvailability() async {
+  @override
+  void didUpdateWidget(covariant StepPayment oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.totalPrice != widget.totalPrice) {
+      _loadPaymentMethods();
+    }
+  }
+
+  Future<void> _loadPaymentMethods() async {
+    final requestVersion = ++_requestVersion;
+
+    if (mounted) {
+      setState(() {
+        _isLoadingMethods = true;
+      });
+    }
+
+    try {
+      final response = await ApiClient.instance.get('/system/get_system_settings');
+      final settings = SystemSettings.fromJson(
+        Map<String, dynamic>.from(response as Map),
+      );
+
+      final cashAvailability = settings.devices.cashSystem
+          ? await _fetchCashAvailability()
+          : const _CashAvailabilityResult(
+              canGiveChange: false,
+              errorMessage: null,
+            );
+
+      if (!_isCurrentRequest(requestVersion)) {
+        return;
+      }
+
+      setState(() {
+        _isLoadingMethods = false;
+        _isAcquiringEnabled = settings.devices.acquiring;
+        _isSbpEnabled = settings.sbpPayment.isEnable;
+        _isCashSystemEnabled = settings.devices.cashSystem;
+        _canGiveChange = settings.devices.cashSystem ? cashAvailability.canGiveChange : false;
+        _changeErrorMessage = cashAvailability.errorMessage;
+      });
+
+      _clearInvalidSelection();
+    } catch (e) {
+      final cashAvailability = await _fetchCashAvailability();
+
+      if (!_isCurrentRequest(requestVersion)) {
+        return;
+      }
+
+      setState(() {
+        _isLoadingMethods = false;
+        _isAcquiringEnabled = true;
+        _isSbpEnabled = false;
+        _isCashSystemEnabled = true;
+        _canGiveChange = cashAvailability.canGiveChange;
+        _changeErrorMessage = cashAvailability.errorMessage;
+      });
+
+      _clearInvalidSelection();
+    }
+  }
+
+  bool _isCurrentRequest(int requestVersion) => mounted && requestVersion == _requestVersion;
+
+  void _clearInvalidSelection() {
+    final selectedMethod = widget.selectedMethod;
+    if (selectedMethod == null) {
+      return;
+    }
+    if (!_isMethodSelectable(selectedMethod)) {
+      widget.onMethodSelected(null);
+    }
+  }
+
+  Future<_CashAvailabilityResult> _fetchCashAvailability() async {
     try {
       final response = await ApiClient.instance.get('/cash_system/bill_dispenser/status');
       final upperBoxValue = response['upperBoxValue'] as int; // в копейках
@@ -50,24 +135,89 @@ class _StepPaymentState extends State<StepPayment> {
 
       print('DEBUG CHANGE: canGiveChange = $canGive');
 
-      if (mounted) {
-        setState(() {
-          _isCheckingChange = false;
-          _canGiveChange = canGive;
-          if (!canGive) {
-            _changeErrorMessage = 'Оплата наличными недоступна — невозможно выдать сдачу. Используйте безналичную оплату или обратитесь к администратору';
-          }
-        });
-      }
+      return _CashAvailabilityResult(
+        canGiveChange: canGive,
+        errorMessage: canGive
+            ? null
+            : 'Оплата наличными недоступна — невозможно выдать сдачу. Используйте безналичную оплату или обратитесь к администратору',
+      );
     } catch (e) {
       print('DEBUG CHANGE: Error checking change availability: $e');
       // Если не удалось проверить, разрешаем оплату наличными
-      if (mounted) {
-        setState(() {
-          _isCheckingChange = false;
-          _canGiveChange = true;
-        });
+      return const _CashAvailabilityResult(
+        canGiveChange: true,
+        errorMessage: null,
+      );
+    }
+  }
+
+  List<Widget> _buildPaymentMethodRows() {
+    final rows = <Widget>[];
+
+    void addRow(Widget row) {
+      if (rows.isNotEmpty) {
+        rows.add(
+          const Padding(
+            padding: EdgeInsets.only(left: 16.0),
+            child: Divider(height: 1, color: Color(0xFF2C2C2E)),
+          ),
+        );
       }
+      rows.add(row);
+    }
+
+    if (_isAcquiringEnabled) {
+      addRow(
+        _buildMethodRow(
+          title: 'Банковская карта (Эквайринг)',
+          subtitle: 'Оплата через терминал Visa, MasterCard, Мир',
+          icon: CupertinoIcons.creditcard_fill,
+          isSelected: widget.selectedMethod == _cardPaymentMethod,
+          onTap: () => widget.onMethodSelected(_cardPaymentMethod),
+        ),
+      );
+    }
+
+    if (_isSbpEnabled) {
+      addRow(
+        _buildMethodRow(
+          title: 'СБП',
+          subtitle: 'Оплата по QR-коду через систему быстрых платежей',
+          icon: CupertinoIcons.qrcode,
+          isSelected: widget.selectedMethod == _sbpPaymentMethod,
+          onTap: () => widget.onMethodSelected(_sbpPaymentMethod),
+        ),
+      );
+    }
+
+    if (_isCashSystemEnabled) {
+      addRow(
+        _buildMethodRow(
+          title: 'Наличные',
+          subtitle: _canGiveChange
+              ? 'Оплата наличными через купюроприемник'
+              : _changeErrorMessage ?? 'Недоступно',
+          icon: CupertinoIcons.money_dollar_circle_fill,
+          isSelected: widget.selectedMethod == _cashPaymentMethod,
+          onTap: () => widget.onMethodSelected(_cashPaymentMethod),
+          isDisabled: !_canGiveChange,
+        ),
+      );
+    }
+
+    return rows;
+  }
+
+  bool _isMethodSelectable(String method) {
+    switch (method) {
+      case _cardPaymentMethod:
+        return _isAcquiringEnabled;
+      case _sbpPaymentMethod:
+        return _isSbpEnabled;
+      case _cashPaymentMethod:
+        return _isCashSystemEnabled && _canGiveChange;
+      default:
+        return false;
     }
   }
 
@@ -199,34 +349,25 @@ class _StepPaymentState extends State<StepPayment> {
               padding: const EdgeInsets.only(left: 16.0),
             ),
 
-            // Первый способ оплаты - Карта
-            _buildMethodRow(
-              title: 'Банковская карта (Эквайринг)',
-              subtitle: 'Оплата через терминал Visa, MasterCard, Мир',
-              icon: CupertinoIcons.creditcard_fill,
-              isSelected: widget.selectedMethod == 'Карта',
-              onTap: () => widget.onMethodSelected('Карта'),
-            ),
-
-            // Разделитель
-            const Padding(
-              padding: EdgeInsets.only(left: 16.0),
-              child: Divider(height: 1, color: Color(0xFF2C2C2E)),
-            ),
-
-            // Третий способ оплаты - Наличные
-            _buildMethodRow(
-              title: 'Наличные',
-              subtitle: _isCheckingChange
-                  ? 'Проверка доступности...'
-                  : (_canGiveChange
-                      ? 'Оплата наличными через купюроприемник'
-                      : _changeErrorMessage ?? 'Недоступно'),
-              icon: CupertinoIcons.money_dollar_circle_fill,
-              isSelected: widget.selectedMethod == 'Наличные',
-              onTap: _canGiveChange && !_isCheckingChange ? () => widget.onMethodSelected('Наличные') : () {},
-              isDisabled: !_canGiveChange || _isCheckingChange,
-            ),
+            if (_isLoadingMethods)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: CupertinoActivityIndicator(radius: 16),
+              )
+            else if (_buildPaymentMethodRows().isEmpty)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: Text(
+                  'Нет доступных способов оплаты. Проверьте системные настройки.',
+                  style: TextStyle(
+                    color: CupertinoColors.systemGrey,
+                    fontSize: 15,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              )
+            else
+              ..._buildPaymentMethodRows(),
           ],
         ),
       ),
@@ -311,4 +452,14 @@ class _StepPaymentState extends State<StepPayment> {
       ),
     );
   }
+}
+
+class _CashAvailabilityResult {
+  final bool canGiveChange;
+  final String? errorMessage;
+
+  const _CashAvailabilityResult({
+    required this.canGiveChange,
+    required this.errorMessage,
+  });
 }

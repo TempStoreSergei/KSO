@@ -1,7 +1,12 @@
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
+
+@visibleForTesting
+DateTime calculateStepPeriodMaxSelectableDate(DateTime currentDate, {int maxNights = 31}) {
+  final today = DateUtils.dateOnly(currentDate);
+  return DateTime(today.year, today.month, today.day + maxNights);
+}
 
 class StepPeriod extends StatefulWidget {
   final DateTime? checkIn;
@@ -35,9 +40,9 @@ class _StepPeriodState extends State<StepPeriod> {
     _endDate = widget.checkOut;
     _today = DateUtils.dateOnly(DateTime.now());
     _minSelectableDate = DateUtils.addMonthsToMonthDate(_today, -1);
-    _maxSelectableDate = DateUtils.addMonthsToMonthDate(_today, 1);
+    _maxSelectableDate = calculateStepPeriodMaxSelectableDate(_today, maxNights: _maxNights);
     // Если даты не заданы, показываем текущий месяц
-    final initialDate = widget.checkIn ?? DateTime.now();
+    final initialDate = widget.checkIn ?? _today;
     _displayMonth = DateTime(initialDate.year, initialDate.month);
   }
 
