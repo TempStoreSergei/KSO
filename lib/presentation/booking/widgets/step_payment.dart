@@ -126,8 +126,6 @@ class _StepPaymentState extends State<StepPayment> {
       final lowerBoxValue = response['lowerBoxValue'] as int; // в копейках
       final lowerBoxCount = response['lowerBoxCount'] as int;
 
-      print('DEBUG CHANGE: totalPrice=${widget.totalPrice}, upperValue=$upperBoxValue (${upperBoxValue ~/ 100}₽), upperCount=$upperBoxCount, lowerValue=$lowerBoxValue (${lowerBoxValue ~/ 100}₽), lowerCount=$lowerBoxCount');
-
       // Проверяем можем ли выдать сдачу для любой возможной суммы оплаты
       final canGive = _canMakeChange(
         widget.totalPrice,
@@ -137,8 +135,6 @@ class _StepPaymentState extends State<StepPayment> {
         lowerBoxCount,
       );
 
-      print('DEBUG CHANGE: canGiveChange = $canGive');
-
       return _CashAvailabilityResult(
         canGiveChange: canGive,
         errorMessage: canGive
@@ -146,7 +142,6 @@ class _StepPaymentState extends State<StepPayment> {
             : 'Оплата наличными недоступна — невозможно выдать сдачу. Используйте безналичную оплату или обратитесь к администратору',
       );
     } catch (e) {
-      print('DEBUG CHANGE: Error checking change availability: $e');
       // Если не удалось проверить, разрешаем оплату наличными
       return const _CashAvailabilityResult(
         canGiveChange: true,
@@ -228,7 +223,6 @@ class _StepPaymentState extends State<StepPayment> {
   bool _canMakeChange(int totalPrice, int upperValue, int upperCount, int lowerValue, int lowerCount) {
     // Если нет купюр в диспенсере, не можем дать сдачу
     if (upperCount == 0 && lowerCount == 0) {
-      print('DEBUG CHANGE: No bills in dispenser');
       return false;
     }
 
@@ -237,23 +231,15 @@ class _StepPaymentState extends State<StepPayment> {
     final lowerRub = lowerValue ~/ 100;
     final totalRub = totalPrice ~/ 100;
 
-    print('DEBUG CHANGE: totalRub=$totalRub, upperRub=$upperRub, lowerRub=$lowerRub');
-
     // НОД номиналов определяет минимальную единицу, которую можно собрать
     final gcdValue = _gcd(upperRub, lowerRub);
-
-    print('DEBUG CHANGE: GCD($upperRub, $lowerRub) = $gcdValue');
-    print('DEBUG CHANGE: $totalRub % $gcdValue = ${totalRub % gcdValue}');
 
     // КЛЮЧЕВАЯ ПРОВЕРКА: если сумма к оплате не делится на НОД номиналов,
     // то для ЛЮБОЙ суммы оплаты (которая будет кратна НОД) сдача не будет кратна НОД,
     // а значит её невозможно выдать имеющимися купюрами!
     if (totalRub % gcdValue != 0) {
-      print('DEBUG CHANGE: totalRub NOT divisible by GCD - cannot give change');
       return false;
     }
-
-    print('DEBUG CHANGE: totalRub IS divisible by GCD - checking if we have enough bills');
 
     // Если сумма кратна НОД, проверяем можем ли мы физически собрать сдачу
     // для разумных сумм оплаты (до 2x от суммы)
@@ -264,12 +250,9 @@ class _StepPaymentState extends State<StepPayment> {
 
       // Пробуем собрать эту сдачу имеющимися купюрами
       if (_canMakeExactChange(change, upperRub, upperCount, lowerRub, lowerCount)) {
-        print('DEBUG CHANGE: Can make change of $change for payment of $payment');
         return true;
       }
     }
-
-    print('DEBUG CHANGE: Cannot make any change amount');
     return false;
   }
 
