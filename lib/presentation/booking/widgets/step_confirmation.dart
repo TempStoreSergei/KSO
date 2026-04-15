@@ -25,6 +25,14 @@ class StepConfirmation extends StatefulWidget {
 }
 
 class _StepConfirmationState extends State<StepConfirmation> {
+  String get _guestFullName {
+    return [
+      widget.data.lastName,
+      widget.data.firstName,
+      widget.data.middleName,
+    ].where((part) => (part ?? '').trim().isNotEmpty).join(' ');
+  }
+
   Future<void> _submit() async {
     // Больше не отправляем API запрос отсюда
     widget.onSuccess();
@@ -49,7 +57,7 @@ class _StepConfirmationState extends State<StepConfirmation> {
               children: [
                 _buildInfoRow('Корпус:', widget.data.selectedBuilding?.name ?? 'Не выбран'),
                 _buildInfoRow('Комната:', widget.data.selectedRoom?.name ?? 'Не выбрана'),
-                _buildInfoRow('Гость:', '${widget.data.lastName} ${widget.data.firstName}'),
+                _buildInfoRow('Гость:', _guestFullName.isEmpty ? 'Не указан' : _guestFullName),
                 _buildInfoRow('Телефон:', (widget.data.phoneNumber ?? '').isNotEmpty ? formatRuPhone(widget.data.phoneNumber!) : '—'),
                 const SizedBox(height: 12),
                 _buildInfoRow('Категория:', _getCategoryName(widget.data.selectedCategory)),
@@ -145,9 +153,10 @@ class _StepConfirmationState extends State<StepConfirmation> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Flexible(
+            flex: 2,
             child: Text(
               title,
               style: TextStyle(
@@ -157,12 +166,20 @@ class _StepConfirmationState extends State<StepConfirmation> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              color: CupertinoColors.white,
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
-              fontSize: isTotal ? 26 : 16,
+          const SizedBox(width: 16),
+          Flexible(
+            flex: 3,
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              softWrap: true,
+              maxLines: isTotal ? 1 : 3,
+              overflow: isTotal ? TextOverflow.ellipsis : TextOverflow.visible,
+              style: TextStyle(
+                color: CupertinoColors.white,
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
+                fontSize: isTotal ? 26 : 16,
+              ),
             ),
           ),
         ],

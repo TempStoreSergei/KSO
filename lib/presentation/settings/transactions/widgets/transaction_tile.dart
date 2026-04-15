@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:intl/intl.dart';
 import 'package:motel/domain/entities/transaction.dart';
 
 class TransactionTile extends StatelessWidget {
@@ -36,9 +37,10 @@ class TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final displayPrice = _calculateDisplayPrice(transaction);
-    final guestName = '${transaction.guest.lastName} ${transaction.guest.firstName} ${transaction.guest.surname}';
+    final guestName = transaction.guest.fullName;
     final paymentColor = _paymentColor(transaction.paymentType);
     final phone = transaction.guest.phoneNumber?.trim();
+    final paymentDateTime = _formatPaymentDateTime(transaction.paymentDateTime);
     final servicesSum = transaction.services.fold<int>(0, (sum, s) => sum + s.totalPrice);
     final finesSum = transaction.fines.fold<int>(0, (sum, f) => sum + f.totalPrice);
     final hasServices = transaction.services.isNotEmpty;
@@ -92,6 +94,15 @@ class TransactionTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13, color: CupertinoColors.systemGrey2),
           ),
+          if (paymentDateTime != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Оплата: $paymentDateTime',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, color: CupertinoColors.systemGrey2),
+            ),
+          ],
           const SizedBox(height: 6),
           Wrap(
             spacing: 8,
@@ -220,6 +231,11 @@ class TransactionTile extends StatelessWidget {
       return transaction.fines.fold<int>(0, (sum, fine) => sum + fine.totalPrice);
     }
     return transaction.room.totalPrice ?? transaction.room.price;
+  }
+
+  String? _formatPaymentDateTime(DateTime? value) {
+    if (value == null) return null;
+    return DateFormat('dd.MM.yyyy HH:mm', 'ru').format(value.toLocal());
   }
 
   Color _paymentColor(String paymentType) {

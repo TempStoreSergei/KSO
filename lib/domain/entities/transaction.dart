@@ -7,6 +7,7 @@ class Transaction {
   final List<TransactionFine> fines;
   final TransactionRoom room;
   final String paymentType;
+  final DateTime? paymentDateTime;
   final bool sentTo1c;
   final bool sentSuccessfully;
   final String? errorMessage;
@@ -18,6 +19,7 @@ class Transaction {
     required this.fines,
     required this.room,
     required this.paymentType,
+    this.paymentDateTime,
     required this.sentTo1c,
     required this.sentSuccessfully,
     this.errorMessage,
@@ -35,6 +37,7 @@ class Transaction {
           .toList(),
       room: TransactionRoom.fromJson(json['room']),
       paymentType: json['paymentType'],
+      paymentDateTime: _parseTransactionDateTime(json),
       sentTo1c: json['sentTo1c'] ?? false,
       sentSuccessfully: json['sentSuccessfully'] ?? false,
       errorMessage: json['errorMessage'],
@@ -57,6 +60,12 @@ class TransactionGuest {
     this.phoneNumber,
   });
 
+  String get fullName {
+    return [lastName, firstName, surname]
+        .where((part) => part.trim().isNotEmpty)
+        .join(' ');
+  }
+
   factory TransactionGuest.fromJson(Map<String, dynamic> json) {
     return TransactionGuest(
       id: json['id'],
@@ -66,6 +75,43 @@ class TransactionGuest {
       phoneNumber: json['phoneNumber'],
     );
   }
+}
+
+DateTime? _parseTransactionDateTime(Map<String, dynamic> json) {
+  const candidateKeys = [
+    'paymentDateTime',
+    'payment_datetime',
+    'paymentDate',
+    'payment_date',
+    'createdAt',
+    'created_at',
+    'dateTime',
+    'date_time',
+    'timestamp',
+  ];
+
+  for (final key in candidateKeys) {
+    final rawValue = json[key];
+    final parsedValue = _parseDateTime(rawValue);
+    if (parsedValue != null) {
+      return parsedValue;
+    }
+  }
+
+  return null;
+}
+
+DateTime? _parseDateTime(dynamic rawValue) {
+  if (rawValue == null) return null;
+  if (rawValue is DateTime) return rawValue;
+  if (rawValue is String && rawValue.trim().isNotEmpty) {
+    return DateTime.tryParse(rawValue.trim());
+  }
+  if (rawValue is int) {
+    final milliseconds = rawValue > 9999999999 ? rawValue : rawValue * 1000;
+    return DateTime.fromMillisecondsSinceEpoch(milliseconds);
+  }
+  return null;
 }
 
 class TransactionService {

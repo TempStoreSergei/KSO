@@ -1,6 +1,7 @@
-import 'dart:io';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/file_export_service.dart';
 import 'package:motel/domain/entities/transaction.dart';
 import 'package:motel/domain/usecases/get_client_by_number.dart';
 import 'package:motel/domain/usecases/get_transactions.dart';
@@ -12,8 +13,6 @@ import 'package:motel/presentation/settings/transactions/models/send_mode.dart';
 import 'package:motel/presentation/settings/transactions/widgets/transaction_tile.dart';
 import 'package:motel/presentation/settings/transactions/widgets/transactions_header_panel.dart';
 import 'package:motel/presentation/settings/transactions/widgets/transactions_selection_panel.dart';
-import 'package:file_picker/file_picker.dart';
-
 enum PaymentFilter {
   all('Все'),
   cash('Наличные'),
@@ -548,34 +547,27 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           .split('/')
           .last;
 
-      // Показываем диалог выбора места сохранения
-      final savePath = await FilePicker.platform.saveFile(
-        dialogTitle: 'Сохранить файл транзакций',
+      final response = await ApiClient.instance.getRawUrl(fileUrl);
+
+      if (response.statusCode != 200) {
+        throw Exception('Не удалось скачать файл: ${response.statusCode}');
+      }
+
+      final isSaved = await fileExportService.saveBytes(
+        bytes: response.bodyBytes,
         fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['zip'],
+        dialogTitle: 'Выберите папку для сохранения транзакций',
+        mimeType: 'application/zip',
       );
 
-      if (savePath == null) {
-        // Пользователь отменил сохранение
+      if (!isSaved) {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-      // Скачиваем файл
-      final response = await ApiClient.instance.getRawUrl(fileUrl);
-
-      if (response.statusCode == 200) {
-        // Сохраняем файл
-        final file = File(savePath);
-        await file.writeAsBytes(response.bodyBytes);
-
-        if (mounted) {
-          setState(() => _isLoading = false);
-          _showSuccess('Файл успешно сохранен');
-        }
-      } else {
-        throw Exception('Не удалось скачать файл: ${response.statusCode}');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showSuccess(kIsWeb ? 'Скачивание файла началось' : 'Файл успешно сохранен');
       }
     } catch (e) {
       if (mounted) {

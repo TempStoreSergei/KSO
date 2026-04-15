@@ -129,18 +129,14 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
     if (newStep == BookingStep.guestInfo) {
       _keyboardManager.registerFields(
         controllers: [
-          _keyboardManager.lastNameController,
-          _keyboardManager.firstNameController,
-          _keyboardManager.middleNameController,
+          _keyboardManager.fullNameController,
           _keyboardManager.phoneNumberController,
         ],
         focusNodes: [
-          _keyboardManager.lastNameFocusNode,
-          _keyboardManager.firstNameFocusNode,
-          _keyboardManager.middleNameFocusNode,
+          _keyboardManager.fullNameFocusNode,
           _keyboardManager.phoneNumberFocusNode,
         ],
-        phoneFieldIndex: 3, // Индекс поля телефона
+        phoneFieldIndex: 1,
       );
       _keyboardManager.focusFirstField();
     } else if (newStep == BookingStep.roomSelection) {
@@ -355,7 +351,7 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
                                                                                             child: CustomKeyboard(
                                                                                               onKeyPressed: _keyboardManager.keyboardNotifier.onKeyPressed,
                                                                                               numpadOnly: currentStep == BookingStep.roomSelection ||
-                                                                                                  (currentStep == BookingStep.guestInfo && _keyboardManager.focusedFieldIndex == 3),
+                                                                                                  (currentStep == BookingStep.guestInfo && _keyboardManager.focusedFieldIndex == 1),
                                                                                             ),                            ),
                           ),
                         ),
@@ -496,13 +492,9 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
             middleName: middle,
             phoneNumber: phone,
           ),
-          lastNameController: _keyboardManager.lastNameController,
-          firstNameController: _keyboardManager.firstNameController,
-          middleNameController: _keyboardManager.middleNameController,
+          fullNameController: _keyboardManager.fullNameController,
           phoneNumberController: _keyboardManager.phoneNumberController,
-          lastNameFocusNode: _keyboardManager.lastNameFocusNode,
-          firstNameFocusNode: _keyboardManager.firstNameFocusNode,
-          middleNameFocusNode: _keyboardManager.middleNameFocusNode,
+          fullNameFocusNode: _keyboardManager.fullNameFocusNode,
           phoneNumberFocusNode: _keyboardManager.phoneNumberFocusNode,
         );
       case BookingStep.categorySelection:

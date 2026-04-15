@@ -1,6 +1,5 @@
 // lib/core/api/api_client.dart
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
@@ -229,8 +228,11 @@ class ApiClient {
         () async => http.get(url, headers: await _getHeaders()),
       );
       responseJson = _processResponse(response);
-    } on SocketException {
-      throw FetchDataException('Нет интернет-соединения');
+    } catch (e) {
+      if (_isNetworkException(e)) {
+        throw FetchDataException('Нет интернет-соединения');
+      }
+      rethrow;
     }
     return responseJson;
   }
@@ -259,8 +261,11 @@ class ApiClient {
       });
 
       responseJson = _processResponse(response);
-    } on SocketException {
-      throw FetchDataException('Нет интернет-соединения');
+    } catch (e) {
+      if (_isNetworkException(e)) {
+        throw FetchDataException('Нет интернет-соединения');
+      }
+      rethrow;
     }
     return responseJson;
   }
@@ -274,8 +279,11 @@ class ApiClient {
         () async => http.put(url, headers: await _getHeaders(), body: (body == null) ? '' : jsonEncode(body)),
       );
       responseJson = _processResponse(response);
-    } on SocketException {
-      throw FetchDataException('Нет интернет-соединения');
+    } catch (e) {
+      if (_isNetworkException(e)) {
+        throw FetchDataException('Нет интернет-соединения');
+      }
+      rethrow;
     }
     return responseJson;
   }
@@ -293,8 +301,11 @@ class ApiClient {
             .then((streamedResponse) => http.Response.fromStream(streamedResponse));
       });
       responseJson = _processResponse(response);
-    } on SocketException {
-      throw FetchDataException('Нет интернет-соединения');
+    } catch (e) {
+      if (_isNetworkException(e)) {
+        throw FetchDataException('Нет интернет-соединения');
+      }
+      rethrow;
     }
     return responseJson;
   }
@@ -325,8 +336,11 @@ class ApiClient {
         response = await sendOnce();
       }
       responseJson = _processResponse(response);
-    } on SocketException {
-      throw FetchDataException('Нет интернет-соединения');
+    } catch (e) {
+      if (_isNetworkException(e)) {
+        throw FetchDataException('Нет интернет-соединения');
+      }
+      rethrow;
     }
     return responseJson;
   }
@@ -416,8 +430,11 @@ class ApiClient {
         response = await sendOnce();
       }
       responseJson = _processResponse(response);
-    } on SocketException {
-      throw FetchDataException('Нет интернет-соединения');
+    } catch (e) {
+      if (_isNetworkException(e)) {
+        throw FetchDataException('Нет интернет-соединения');
+      }
+      rethrow;
     }
     return responseJson;
   }
@@ -436,6 +453,17 @@ class ApiClient {
     } catch (e) {
       return false;
     }
+  }
+
+  bool _isNetworkException(Object error) {
+    if (error is http.ClientException) {
+      return true;
+    }
+
+    final message = error.toString();
+    return message.contains('SocketException') ||
+        message.contains('ClientException') ||
+        message.contains('XMLHttpRequest error');
   }
 
   dynamic _processResponse(http.Response response) {

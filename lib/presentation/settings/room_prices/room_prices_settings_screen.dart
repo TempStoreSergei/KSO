@@ -1,7 +1,8 @@
-import 'dart:io';
 import 'package:csv/csv.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/file_export_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -53,35 +54,33 @@ class _RoomPricesSettingsScreenState extends State<RoomPricesSettingsScreen> {
       final url = await ApiClient.instance.exportRoomPrices();
       final fileName = url.split('/').last;
 
-      final savePath = await FilePicker.platform.saveFile(
-        dialogTitle: 'Сохранить файл с ценами',
+      final response = await ApiClient.instance.getRawUrl(url);
+
+      if (response.statusCode != 200) {
+        throw Exception('Не удалось скачать файл: ${response.statusCode}');
+      }
+
+      final isSaved = await fileExportService.saveBytes(
+        bytes: response.bodyBytes,
         fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
+        dialogTitle: 'Выберите папку для сохранения цен',
+        mimeType: 'text/csv',
       );
 
-      if (savePath == null) {
+      if (!isSaved) {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-      final response = await ApiClient.instance.getRawUrl(url);
+      final csvDataString = response.body;
+      final csvTable = const CsvToListConverter().convert(csvDataString);
 
-      if (response.statusCode == 200) {
-        final file = File(savePath);
-        await file.writeAsBytes(response.bodyBytes);
-        final csvDataString = response.body;
-        final csvTable = const CsvToListConverter().convert(csvDataString);
-
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _csvData = csvTable;
-          });
-          _showSuccess('Файл успешно сохранен');
-        }
-      } else {
-        throw Exception('Не удалось скачать файл: ${response.statusCode}');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _csvData = csvTable;
+        });
+        _showSuccess(kIsWeb ? 'Скачивание файла началось' : 'Файл успешно сохранен');
       }
     } catch (e) {
       if (mounted) {
@@ -244,7 +243,7 @@ class _RoomPricesSettingsScreenState extends State<RoomPricesSettingsScreen> {
           ),
           if (_isLoading)
             Container(
-              color: CupertinoColors.black.withOpacity(0.3),
+              color: CupertinoColors.black.withValues(alpha: 0.3),
               child: const Center(
                 child: CupertinoActivityIndicator(radius: 15),
               ),

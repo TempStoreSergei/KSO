@@ -9,25 +9,17 @@ import 'package:motel/presentation/guest_info/keyboard_notifier.dart';
 
 class StepGuestInfo extends StatefulWidget {
   final Function(String, String, String, String) onChanged;
-  final TextEditingController lastNameController;
-  final TextEditingController firstNameController;
-  final TextEditingController middleNameController;
+  final TextEditingController fullNameController;
   final TextEditingController phoneNumberController;
-  final FocusNode lastNameFocusNode;
-  final FocusNode firstNameFocusNode;
-  final FocusNode middleNameFocusNode;
+  final FocusNode fullNameFocusNode;
   final FocusNode phoneNumberFocusNode;
 
   const StepGuestInfo({
     super.key,
     required this.onChanged,
-    required this.lastNameController,
-    required this.firstNameController,
-    required this.middleNameController,
+    required this.fullNameController,
     required this.phoneNumberController,
-    required this.lastNameFocusNode,
-    required this.firstNameFocusNode,
-    required this.middleNameFocusNode,
+    required this.fullNameFocusNode,
     required this.phoneNumberFocusNode,
   });
 
@@ -39,34 +31,33 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
   @override
   void initState() {
     super.initState();
-    widget.lastNameController.addListener(_onDataChanged);
-    widget.firstNameController.addListener(_onDataChanged);
-    widget.middleNameController.addListener(_onDataChanged);
+    widget.fullNameController.addListener(_onDataChanged);
     widget.phoneNumberController.addListener(_onDataChanged);
   }
 
   void _onDataChanged() {
-    // Получаем чистые цифры из KeyboardNotifier
     final keyboardNotifier = Provider.of<KeyboardNotifier>(context, listen: false);
     final unmaskedPhone = keyboardNotifier.unmaskedPhone;
+    final fullName = widget.fullNameController.text.trim();
+    final nameParts = fullName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
+    final lastName = nameParts.isNotEmpty ? nameParts[0] : '';
+    final firstName = nameParts.length > 1 ? nameParts[1] : '';
+    final middleName = nameParts.length > 2 ? nameParts.sublist(2).join(' ') : '';
 
     widget.onChanged(
-      widget.firstNameController.text,
-      widget.lastNameController.text,
-      widget.middleNameController.text,
+      firstName,
+      lastName,
+      middleName,
       unmaskedPhone.isEmpty ? '' : '7$unmaskedPhone',
     );
   }
 
   @override
   void dispose() {
-    widget.lastNameController.removeListener(_onDataChanged);
-    widget.firstNameController.removeListener(_onDataChanged);
-    widget.middleNameController.removeListener(_onDataChanged);
+    widget.fullNameController.removeListener(_onDataChanged);
     widget.phoneNumberController.removeListener(_onDataChanged);
     super.dispose();
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -79,41 +70,20 @@ class _StepGuestInfoState extends State<StepGuestInfo> {
         margin: EdgeInsets.zero,
         children: [
           CupertinoListTile(
-            title: const Text('Фамилия'),
-            additionalInfo: Expanded(
+            title: const Text('ФИО'),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8),
               child: CupertinoTextField(
-                controller: widget.lastNameController,
-                focusNode: widget.lastNameFocusNode,
-                textAlign: TextAlign.end,
+                controller: widget.fullNameController,
+                focusNode: widget.fullNameFocusNode,
+                textAlign: TextAlign.start,
                 style: const TextStyle(color: CupertinoColors.systemGrey),
                 decoration: null,
-                placeholder: 'Фамилия',
-              ),
-            ),
-          ),
-          CupertinoListTile(
-            title: const Text('Имя'),
-            additionalInfo: Expanded(
-              child: CupertinoTextField(
-                controller: widget.firstNameController,
-                focusNode: widget.firstNameFocusNode,
-                textAlign: TextAlign.end,
-                style: const TextStyle(color: CupertinoColors.systemGrey),
-                decoration: null,
-                placeholder: 'Имя',
-              ),
-            ),
-          ),
-          CupertinoListTile(
-            title: const Text('Отчество'),
-            additionalInfo: Expanded(
-              child: CupertinoTextField(
-                controller: widget.middleNameController,
-                focusNode: widget.middleNameFocusNode,
-                textAlign: TextAlign.end,
-                style: const TextStyle(color: CupertinoColors.systemGrey),
-                decoration: null,
-                placeholder: 'если есть',
+                placeholder: 'Фамилия Имя Отчество',
+                keyboardType: TextInputType.name,
+                textCapitalization: TextCapitalization.words,
+                minLines: 1,
+                maxLines: 3,
               ),
             ),
           ),

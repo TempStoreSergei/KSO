@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:intl/intl.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/domain/entities/transaction.dart';
 import 'package:motel/domain/usecases/send_transaction_to_1c_usecase.dart';
@@ -93,10 +94,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 CupertinoListSection.insetGrouped(
                   header: const Text('ИНФОРМАЦИЯ О ГОСТЕ'),
                   children: [
-                    _buildDetailRow('Фамилия', widget.transaction.guest.lastName),
-                    _buildDetailRow('Имя', widget.transaction.guest.firstName),
-                    if (widget.transaction.guest.surname.isNotEmpty)
-                      _buildDetailRow('Отчество', widget.transaction.guest.surname),
+                    _buildDetailRow('ФИО', widget.transaction.guest.fullName),
                   ],
                 ),
 
@@ -157,6 +155,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
+                    if (widget.transaction.paymentDateTime != null)
+                      CupertinoListTile(
+                        title: const Text('Дата и время оплаты'),
+                        additionalInfo: Text(
+                          DateFormat('dd.MM.yyyy HH:mm', 'ru').format(widget.transaction.paymentDateTime!.toLocal()),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
                     CupertinoListTile(
                       title: const Text(
                         'Итоговая сумма',

@@ -8,13 +8,9 @@ import 'package:motel/presentation/guest_info/keyboard_notifier.dart';
 /// Менеджер для управления клавиатурой и полями ввода
 class KeyboardManager {
   // Поля для данных гостя
-  late final TextEditingController lastNameController;
-  late final TextEditingController firstNameController;
-  late final TextEditingController middleNameController;
+  late final TextEditingController fullNameController;
   late final TextEditingController phoneNumberController;
-  final FocusNode lastNameFocusNode = FocusNode();
-  final FocusNode firstNameFocusNode = FocusNode();
-  final FocusNode middleNameFocusNode = FocusNode();
+  final FocusNode fullNameFocusNode = FocusNode();
   final FocusNode phoneNumberFocusNode = FocusNode();
 
   // Поля для поиска
@@ -27,9 +23,7 @@ class KeyboardManager {
   int focusedFieldIndex = 0;
 
   KeyboardManager() {
-    lastNameController = TextEditingController();
-    firstNameController = TextEditingController();
-    middleNameController = TextEditingController();
+    fullNameController = TextEditingController();
     phoneNumberController = TextEditingController();
     roomSearchController = TextEditingController();
     itemSearchController = TextEditingController();
@@ -38,31 +32,17 @@ class KeyboardManager {
 
   /// Инициализация слушателей фокуса для полей гостя
   void initializeGuestFocusListeners(void Function(void Function()) setState) {
-    lastNameFocusNode.addListener(() {
-      if (lastNameFocusNode.hasFocus) {
+    fullNameFocusNode.addListener(() {
+      if (fullNameFocusNode.hasFocus) {
         setState(() => focusedFieldIndex = 0);
         keyboardNotifier.setActiveField(0);
       }
     });
 
-    firstNameFocusNode.addListener(() {
-      if (firstNameFocusNode.hasFocus) {
-        setState(() => focusedFieldIndex = 1);
-        keyboardNotifier.setActiveField(1);
-      }
-    });
-
-    middleNameFocusNode.addListener(() {
-      if (middleNameFocusNode.hasFocus) {
-        setState(() => focusedFieldIndex = 2);
-        keyboardNotifier.setActiveField(2);
-      }
-    });
-
     phoneNumberFocusNode.addListener(() {
       if (phoneNumberFocusNode.hasFocus) {
-        setState(() => focusedFieldIndex = 3);
-        keyboardNotifier.setActiveField(3);
+        setState(() => focusedFieldIndex = 1);
+        keyboardNotifier.setActiveField(1);
       }
     });
   }
@@ -83,24 +63,20 @@ class KeyboardManager {
   /// Установка фокуса на первое поле
   void focusFirstField() {
     Future.delayed(const Duration(milliseconds: 100), () {
-      if (lastNameFocusNode.canRequestFocus) {
-        lastNameFocusNode.requestFocus();
+      if (fullNameFocusNode.canRequestFocus) {
+        fullNameFocusNode.requestFocus();
       }
     });
   }
 
   /// Освобождение ресурсов
   void dispose() {
-    lastNameController.dispose();
-    firstNameController.dispose();
-    middleNameController.dispose();
+    fullNameController.dispose();
     phoneNumberController.dispose();
     roomSearchController.dispose();
     itemSearchController.dispose();
 
-    lastNameFocusNode.dispose();
-    firstNameFocusNode.dispose();
-    middleNameFocusNode.dispose();
+    fullNameFocusNode.dispose();
     phoneNumberFocusNode.dispose();
     roomSearchFocusNode.dispose();
     itemSearchFocusNode.dispose();
@@ -111,9 +87,7 @@ class KeyboardManager {
   /// Получение текущих значений полей
   Map<String, String> getValues() {
     return {
-      'lastName': lastNameController.text,
-      'firstName': firstNameController.text,
-      'middleName': middleNameController.text,
+      'fullName': fullNameController.text,
       'phoneNumber': phoneNumberController.text,
     };
   }
