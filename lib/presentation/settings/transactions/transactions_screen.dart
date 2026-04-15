@@ -16,7 +16,7 @@ import 'package:motel/presentation/settings/transactions/widgets/transactions_se
 enum PaymentFilter {
   all('Все'),
   cash('Наличные'),
-  card('Карта'),
+  online('Он-лайн платёж'),
   sbp('СБП');
 
   final String label;
