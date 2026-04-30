@@ -190,7 +190,7 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
     _showErrorDialog('Не удалось завершить бронирование.\n\n$message');
   }
 
-  void _showHardwareErrorDialog(String message, Future<bool> Function() retryPrint) {
+  void _showHardwareErrorDialog(String message, Future<bool> Function() retryAction) {
     final cubit = context.read<BookingCubit>();
     showCupertinoDialog(
       context: context,
@@ -216,14 +216,14 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
           CupertinoDialogAction(
             onPressed: () async {
               Navigator.of(ctx).pop();
-              final success = await retryPrint();
+              final success = await retryAction();
               if (success) {
                 if (mounted) cubit.markBookingSuccessful();
               } else {
-                if (mounted) _showHardwareErrorDialog('Повторная печать не удалась.', retryPrint);
+                if (mounted) _showHardwareErrorDialog('Повторная операция не удалась.', retryAction);
               }
             },
-            child: const Text('Повторить печать'),
+            child: const Text('Повторить операцию'),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -231,7 +231,7 @@ class _RoomBookingViewState extends State<_RoomBookingView> {
               Navigator.of(ctx).pop();
               cubit.markBookingSuccessful();
             },
-            child: const Text('Завершить без чека'),
+            child: const Text('Завершить вручную'),
           ),
         ],
       ),

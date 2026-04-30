@@ -44,6 +44,8 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   StreamSubscription? _socketSubscription;
   int _collectedAmount = 0; // Собранная сумма в копейках
   bool _isCancelling = false;
+  bool _isTimingOut = false;
+  bool _hasHandledSuccessfulPayment = false;
   bool _isDeviceReady = false;
 
   @override
@@ -75,7 +77,6 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
         _startPaymentTimer();
       }
     } catch (e) {
-      print('Ошибка запуска оплаты: $e');
       if (widget.onHardwareError != null) {
         widget.onHardwareError!('Оборудование не отвечает: $e', () async => false);
       } else {
@@ -90,14 +91,20 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     try {
       if (widget.paymentMethod == 'Наличные') {
         await ApiClient.instance.get('/cash_system/stop_accepting_payment');
+        final canLeavePayment = await _dispenseInsertedCashBeforeExit();
+        if (!canLeavePayment) {
+          if (mounted) {
+            setState(() => _isCancelling = false);
+          }
+          return;
+        }
       }
       _paymentTimer?.cancel();
       _socketSubscription?.cancel();
       if (mounted) {
         widget.onCancel?.call();
       }
-    } catch (e) {
-      print('Ошибка отмены оплаты: $e');
+    } catch (_) {
       if (mounted) {
         setState(() => _isCancelling = false);
       }
@@ -106,46 +113,56 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
 
   void _listenToPaymentEvents() {
     _socketSubscription = widget.webSocketService.messageStream.listen((message) {
-      print('DEBUG: WebSocket message received: $message');
       final eventType = message['event'];
       final eventData = message['data'];
 
       if (eventType == 'acceptedBill') {
-        print('DEBUG: acceptedBill event, collected_amount: ${eventData?['collected_amount']}');
         // Обновление собранной суммы для наличных
-        if (mounted && eventData != null && eventData['collected_amount'] != null) {
+        final collectedAmount = eventData is Map ? _readInt(eventData['collected_amount']) : null;
+        if (mounted && collectedAmount != null) {
           setState(() {
-            _collectedAmount = eventData['collected_amount'] as int;
+            _collectedAmount = collectedAmount;
           });
         }
       } else if (eventType == 'successPayment') {
-        print('DEBUG: successPayment event received');
-        _handleSuccessfulPayment();
+        _handleSuccessfulPayment(eventData);
       } else if (eventType == 'errorPayment') {
-        print('DEBUG: errorPayment event received');
         widget.onPaymentError();
       }
     });
   }
 
-  Future<void> _handleSuccessfulPayment() async {
-    print('DEBUG: _handleSuccessfulPayment called');
+  Future<void> _handleSuccessfulPayment(dynamic eventData) async {
+    if (_hasHandledSuccessfulPayment) return;
+    _hasHandledSuccessfulPayment = true;
+    _paymentTimer?.cancel();
     try {
+      _syncCollectedAmount(eventData);
+      final changeAmount = _getChangeAmount(eventData);
       final isCheckPrinted = await _printCheck();
-      print('DEBUG: isCheckPrinted = $isCheckPrinted');
       if (isCheckPrinted) {
         final useCase = SaveTransactionUseCase(ApiClient.instance);
-        print('DEBUG: Calling SaveTransactionUseCase');
         await useCase.call(widget.data);
-        print('DEBUG: Transaction saved, calling onPaymentComplete');
+        final isChangeDispensed = await _dispenseCashIfNeeded(changeAmount);
+        if (!isChangeDispensed) {
+          if (widget.onHardwareError != null) {
+            widget.onHardwareError!(
+              'Не удалось выдать сдачу. Обратитесь к администратору.',
+              () => _dispenseCashIfNeeded(changeAmount),
+            );
+          } else {
+            widget.onPaymentError();
+          }
+          return;
+        }
         widget.onPaymentComplete();
       } else {
-        print('DEBUG: Check printing failed');
         // Сохраняем транзакцию даже если чек не напечатался
         try {
           final useCase = SaveTransactionUseCase(ApiClient.instance);
           await useCase.call(widget.data);
         } catch (_) {}
+        await _dispenseCashIfNeeded(changeAmount);
         if (widget.onHardwareError != null) {
           widget.onHardwareError!('Не удалось напечатать чек. Обратитесь к администратору.', _printCheck);
         } else {
@@ -153,7 +170,6 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
         }
       }
     } catch (e) {
-      print('DEBUG: Error in _handleSuccessfulPayment: $e');
       // Сохраняем транзакцию даже при ошибке оборудования
       try {
         final useCase = SaveTransactionUseCase(ApiClient.instance);
@@ -165,6 +181,90 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
         widget.onPaymentError();
       }
     }
+  }
+
+  void _syncCollectedAmount(dynamic eventData) {
+    if (eventData is! Map) return;
+
+    final collectedAmount = _readInt(eventData['collected_amount']);
+    if (collectedAmount == null) return;
+
+    _collectedAmount = collectedAmount;
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  int _getChangeAmount(dynamic eventData) {
+    if (widget.paymentMethod != 'Наличные') return 0;
+
+    if (eventData is Map) {
+      final eventChange = _readInt(eventData['change']);
+      if (eventChange != null && eventChange > 0) return eventChange;
+    }
+
+    final calculatedChange = _collectedAmount - widget.totalPrice;
+    return calculatedChange > 0 ? calculatedChange : 0;
+  }
+
+  int? _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  Future<bool> _dispenseCashIfNeeded(int amount) async {
+    if (widget.paymentMethod != 'Наличные' || amount <= 0) return true;
+
+    try {
+      await ApiClient.instance.get(
+        '/cash_system/dispense_change',
+        params: {'amount': amount},
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _dispenseInsertedCashBeforeExit() async {
+    if (widget.paymentMethod != 'Наличные' || _collectedAmount <= 0) return true;
+
+    while (mounted) {
+      final isDispensed = await _dispenseCashIfNeeded(_collectedAmount);
+      if (isDispensed) return true;
+
+      final retry = await _showDispenseRetryDialog(_collectedAmount);
+      if (retry != true) return true;
+    }
+
+    return false;
+  }
+
+  Future<bool?> _showDispenseRetryDialog(int amount) {
+    return showCupertinoDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Ошибка выдачи наличных'),
+        content: Text(
+          'Не удалось выдать внесённую сумму ${amount ~/ 100} ₽. '
+          'Повторите выдачу или обратитесь к администратору.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Повторить'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Продолжить вручную'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<bool> _printCheck() async {
@@ -222,15 +322,37 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
 
   void _startPaymentTimer() {
     _paymentTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      var shouldHandleTimeout = false;
+
       setState(() {
         if (_remainingSeconds > 0) {
           _remainingSeconds--;
         } else {
           _paymentTimer?.cancel();
-          widget.onPaymentTimeout();
+          shouldHandleTimeout = true;
         }
       });
+
+      if (shouldHandleTimeout) {
+        _handlePaymentTimeout();
+      }
     });
+  }
+
+  Future<void> _handlePaymentTimeout() async {
+    if (_isTimingOut) return;
+    _isTimingOut = true;
+
+    if (widget.paymentMethod == 'Наличные') {
+      try {
+        await ApiClient.instance.get('/cash_system/stop_accepting_payment');
+      } catch (_) {}
+      await _dispenseInsertedCashBeforeExit();
+    }
+
+    if (mounted) {
+      widget.onPaymentTimeout();
+    }
   }
 
   @override
