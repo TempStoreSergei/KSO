@@ -138,23 +138,10 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     _paymentTimer?.cancel();
     try {
       _syncCollectedAmount(eventData);
-      final changeAmount = _getChangeAmount(eventData);
       final isCheckPrinted = await _printCheck();
       if (isCheckPrinted) {
         final useCase = SaveTransactionUseCase(ApiClient.instance);
         await useCase.call(widget.data);
-        final isChangeDispensed = await _dispenseCashIfNeeded(changeAmount);
-        if (!isChangeDispensed) {
-          if (widget.onHardwareError != null) {
-            widget.onHardwareError!(
-              'Не удалось выдать сдачу. Обратитесь к администратору.',
-              () => _dispenseCashIfNeeded(changeAmount),
-            );
-          } else {
-            widget.onPaymentError();
-          }
-          return;
-        }
         widget.onPaymentComplete();
       } else {
         // Сохраняем транзакцию даже если чек не напечатался
@@ -162,7 +149,6 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
           final useCase = SaveTransactionUseCase(ApiClient.instance);
           await useCase.call(widget.data);
         } catch (_) {}
-        await _dispenseCashIfNeeded(changeAmount);
         if (widget.onHardwareError != null) {
           widget.onHardwareError!('Не удалось напечатать чек. Обратитесь к администратору.', _printCheck);
         } else {
@@ -195,18 +181,6 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     }
   }
 
-  int _getChangeAmount(dynamic eventData) {
-    if (widget.paymentMethod != 'Наличные') return 0;
-
-    if (eventData is Map) {
-      final eventChange = _readInt(eventData['change']);
-      if (eventChange != null && eventChange > 0) return eventChange;
-    }
-
-    final calculatedChange = _collectedAmount - widget.totalPrice;
-    return calculatedChange > 0 ? calculatedChange : 0;
-  }
-
   int? _readInt(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.toInt();
@@ -214,7 +188,7 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     return null;
   }
 
-  Future<bool> _dispenseCashIfNeeded(int amount) async {
+  Future<bool> _dispenseCashChange(int amount) async {
     if (widget.paymentMethod != 'Наличные' || amount <= 0) return true;
 
     try {
@@ -232,7 +206,7 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     if (widget.paymentMethod != 'Наличные' || _collectedAmount <= 0) return true;
 
     while (mounted) {
-      final isDispensed = await _dispenseCashIfNeeded(_collectedAmount);
+      final isDispensed = await _dispenseCashChange(_collectedAmount);
       if (isDispensed) return true;
 
       final retry = await _showDispenseRetryDialog(_collectedAmount);
@@ -340,14 +314,13 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   }
 
   Future<void> _handlePaymentTimeout() async {
-    if (_isTimingOut) return;
+    if (_isTimingOut || _isCancelling || _hasHandledSuccessfulPayment) return;
     _isTimingOut = true;
 
     if (widget.paymentMethod == 'Наличные') {
       try {
         await ApiClient.instance.get('/cash_system/stop_accepting_payment');
       } catch (_) {}
-      await _dispenseInsertedCashBeforeExit();
     }
 
     if (mounted) {
