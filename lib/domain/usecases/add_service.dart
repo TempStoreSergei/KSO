@@ -3,6 +3,7 @@
 // ============================================
 
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/domain/entities/api_service.dart';
 
 class AddServiceUseCase {
@@ -17,7 +18,7 @@ class AddServiceUseCase {
     required int tax,
   }) async {
     try {
-      print("[AddServiceUseCase] Создание услуги: $name, цена: $price, налог: $tax");
+      DiagnosticLogger.info('services', 'create_started', data: {'name': name, 'price': price, 'tax': tax});
 
       final response = await _apiClient.post(
         '/services',
@@ -28,10 +29,10 @@ class AddServiceUseCase {
         },
       );
 
-      print("[AddServiceUseCase] Услуга успешно создана");
+      DiagnosticLogger.info('services', 'create_succeeded', data: {'name': name});
       return ApiService.fromJson(response as Map<String, dynamic>);
     } catch (e) {
-      print("[AddServiceUseCase] Ошибка: $e");
+      DiagnosticLogger.info('services', 'create_failed', data: {'name': name, 'error': e.toString()});
       throw Exception('Ошибка при создании услуги: $e');
     }
   }

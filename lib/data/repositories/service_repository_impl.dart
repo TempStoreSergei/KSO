@@ -1,4 +1,5 @@
 import 'package:motel/core/api/api_exceptions.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/data/datasources/service_remote_data_source.dart';
 import 'package:motel/domain/entities/service_entity.dart';
 import 'package:motel/domain/repositories/service_repository.dart';
@@ -14,10 +15,10 @@ class ServiceRepositoryImpl implements ServiceRepository {
       await request();
       return true;
     } on ApiException catch (e) {
-      print('API Ошибка в ServiceRepositoryImpl: $e');
+      DiagnosticLogger.info('services', 'repository_api_failed', data: {'error': e.toString()});
       return false;
     } catch (e) {
-      print('Непредвиденная ошибка в ServiceRepositoryImpl: $e');
+      DiagnosticLogger.info('services', 'repository_unexpected_failed', data: {'error': e.toString()});
       return false;
     }
   }
@@ -28,7 +29,7 @@ class ServiceRepositoryImpl implements ServiceRepository {
       final serviceModels = await remoteDataSource.getServices();
       return serviceModels;
     } catch (e) {
-      print('Ошибка получения услуг: $e');
+      DiagnosticLogger.info('services', 'get_failed', data: {'error': e.toString()});
       return [];
     }
   }

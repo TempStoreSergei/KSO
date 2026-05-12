@@ -9,10 +9,10 @@
     final VoidCallback onTap;
 
     const ServiceTile({
-      Key? key,
+      super.key,
       required this.service,
       required this.onTap,
-    }) : super(key: key);
+    });
 
     // Карта для динамического сопоставления имени услуги и иконки.
     static final Map<String, IconData> _serviceIcons = {

@@ -5,7 +5,7 @@ import 'package:motel/presentation/helpers/glassmorphic_container.dart';
 
 class MoreTile extends StatelessWidget {
   final VoidCallback onTap;
-  const MoreTile({Key? key, required this.onTap}) : super(key: key);
+  const MoreTile({super.key, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

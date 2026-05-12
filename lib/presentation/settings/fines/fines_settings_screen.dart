@@ -3,7 +3,6 @@
 // ============================================
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/core/constants/permissions_mapping.dart';
 import 'package:motel/core/services/permissions_service.dart';

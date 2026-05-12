@@ -48,6 +48,7 @@ class PermissionsMapping {
 
   // ПРИЛОЖЕНИЕ
   static const String about = 'get_status'; // О приложении (доступно всем)
+  static const String operations = 'get_transactions'; // Локальная диагностика операций
 
   // СИСТЕМНЫЕ
   static const String shutdown = 'shutdown'; // Выключение

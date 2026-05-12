@@ -286,7 +286,7 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
           ),
           if (_isBusy)
             Container(
-              color: CupertinoColors.black.withOpacity(0.4),
+              color: CupertinoColors.black.withValues(alpha: 0.4),
               child: const Center(child: CupertinoActivityIndicator(radius: 20)),
             ),
         ],
@@ -322,9 +322,9 @@ class _ServiceEditScreenState extends State<ServiceEditScreen> {
         content: Text(message),
         actions: [
           CupertinoDialogAction(
-              child: const Text('OK'),
               isDefaultAction: true,
-              onPressed: () => Navigator.of(ctx).pop())
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'))
         ],
       ),
     );

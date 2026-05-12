@@ -17,6 +17,7 @@ import 'package:motel/presentation/settings/acquiring/acquiring_settings_screen.
 import 'package:motel/presentation/settings/room_prices/room_prices_settings_screen.dart';
 import 'package:motel/presentation/settings/tax/tax_settings_screen.dart';
 import 'package:motel/presentation/settings/server/server_settings_screen.dart';
+import 'package:motel/presentation/settings/operations/operations_screen.dart';
 
 // Главный виджет экрана настроек
 class AdminDashboardScreen extends StatefulWidget {
@@ -81,6 +82,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       'fines': _permissionsService.hasPermission(_userRole, PermissionsMapping.fines),
       'roomPrices': _permissionsService.hasPermission(_userRole, PermissionsMapping.roomPrices),
       'transactions': _permissionsService.hasPermission(_userRole, PermissionsMapping.transactions),
+      'operations': _permissionsService.hasPermission(_userRole, PermissionsMapping.operations),
       'taxSettings': _permissionsService.hasPermission(_userRole, PermissionsMapping.taxSettings),
       'changePassword': _permissionsService.hasPermission(_userRole, PermissionsMapping.changePassword),
       'telegram': _permissionsService.hasPermission(_userRole, PermissionsMapping.telegram),
@@ -412,6 +414,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       icon: CupertinoIcons.globe,
                       iconColor: CupertinoColors.systemBlue,
                     ),
+                    if (_permissions['operations'] == true)
+                      _buildNavigationTile(
+                        label: 'Операции',
+                        onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const OperationsScreen())),
+                        icon: CupertinoIcons.waveform_path_ecg,
+                        iconColor: CupertinoColors.systemOrange,
+                      ),
                     _buildNavigationTile(
                       label: 'О приложении',
                       onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const AboutScreen())),

@@ -1,5 +1,6 @@
 // lib/data/repositories/screensaver_repository_impl.dart
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/domain/entities/screensaver_file.dart';
 import 'package:motel/domain/repositories/screensaver_repository.dart';
 import 'package:image_picker/image_picker.dart';
@@ -22,7 +23,7 @@ class ScreensaverRepositoryImpl implements ScreensaverRepository {
       return files;
 
     } catch (e) {
-      print('Ошибка при загрузке файлов заставки: $e');
+      DiagnosticLogger.info('screensaver', 'get_files_failed', data: {'error': e.toString()});
       rethrow; // Перебрасываем ошибку, чтобы UI мог ее обработать
     }
   }
@@ -34,7 +35,7 @@ class ScreensaverRepositoryImpl implements ScreensaverRepository {
       await _apiClient.multipartPost('/screensaver/add_screensaver_file', imageFile);
       return true;
     } catch (e) {
-      print('Ошибка при добавлении файла: $e');
+      DiagnosticLogger.info('screensaver', 'add_file_failed', data: {'fileName': imageFile.name, 'error': e.toString()});
       return false;
     }
   }
@@ -45,7 +46,7 @@ class ScreensaverRepositoryImpl implements ScreensaverRepository {
       await _apiClient.delete('/screensaver/delete_screensaver_file', body: {'fileID': fileID});
       return true;
     } catch (e) {
-      print('Ошибка при удалении файла: $e');
+      DiagnosticLogger.info('screensaver', 'delete_file_failed', data: {'fileID': fileID, 'error': e.toString()});
       return false;
     }
   }
@@ -59,7 +60,7 @@ class ScreensaverRepositoryImpl implements ScreensaverRepository {
       });
       return true;
     } catch (e) {
-      print('Ошибка при обновлении порядка файла $fileID: $e');
+      DiagnosticLogger.info('screensaver', 'update_order_failed', data: {'fileID': fileID, 'error': e.toString()});
       return false;
     }
   }
@@ -72,7 +73,7 @@ class ScreensaverRepositoryImpl implements ScreensaverRepository {
       });
       return true;
     } catch (e) {
-      print('Ошибка при изменении статуса заставки: $e');
+      DiagnosticLogger.info('screensaver', 'set_status_failed', data: {'enabled': isEnabled, 'error': e.toString()});
       return false;
     }
   }

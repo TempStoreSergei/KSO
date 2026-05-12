@@ -8,12 +8,12 @@ class GlassmorphicContainer extends StatelessWidget {
   final Color? color; // <-- ДОБАВЛЕНО: Новый параметр для цвета
 
   const GlassmorphicContainer({
-    Key? key,
+    super.key,
     required this.child,
     this.borderRadius = 16.0,
     this.padding,
     this.color, // <-- ДОБАВЛЕНО: В конструктор
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -25,10 +25,10 @@ class GlassmorphicContainer extends StatelessWidget {
           padding: padding,
           decoration: BoxDecoration(
             // ИСПОЛЬЗУЕТСЯ ЗДЕСЬ: Если цвет передан, используем его, иначе - цвет по умолчанию
-            color: color ?? Colors.black.withOpacity(0.2),
+            color: color ?? Colors.black.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(borderRadius),
             border: Border.all(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               width: 1.5,
             ),
           ),

@@ -1,5 +1,6 @@
 
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/data/models/room_model.dart';
 import 'package:motel/domain/models/booking_models.dart';
 import 'dart:math';
@@ -77,7 +78,7 @@ class GetRooms {
 
       return roomsByBuilding;
     } catch (e) {
-      print('[GetRooms] Ошибка загрузки комнат с API: $e');
+      DiagnosticLogger.info('rooms', 'get_failed', data: {'error': e.toString()});
       // В случае ошибки возвращаем пустую карту, чтобы избежать моковых данных
       return {};
     }

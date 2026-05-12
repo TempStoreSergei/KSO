@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 
@@ -23,6 +24,7 @@ class WebSocketService extends ChangeNotifier {
   WebSocketConnectionState _state = WebSocketConnectionState.disconnected;
   String? _errorMessage;
   bool _isAdminMode = false;
+  String? _connectOperationId;
 
   // Stream controllers для разных типов событий
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
@@ -54,24 +56,27 @@ class WebSocketService extends ChangeNotifier {
   Future<void> connect() async {
     // Не подключаемся в режиме админки
     if (_isAdminMode) {
-      debugPrint('WebSocket: подключение заблокировано в режиме админки');
+      DiagnosticLogger.info('websocket', 'connect_blocked_admin_mode');
       return;
     }
 
     if (isConnected) {
-      debugPrint('WebSocket: уже подключен');
+      DiagnosticLogger.info('websocket', 'connect_skipped_already_connected');
       return;
     }
 
+    _connectOperationId = DiagnosticLogger.start('websocket', 'connect', data: {'url': _wsUrl});
     _updateState(WebSocketConnectionState.connecting);
 
     try {
-      debugPrint('WebSocket: подключение к $_wsUrl');
       _channel = WebSocketChannel.connect(Uri.parse(_wsUrl));
 
       await _channel!.ready;
       _updateState(WebSocketConnectionState.connected);
-      debugPrint('WebSocket: успешно подключен к $_wsUrl');
+      if (_connectOperationId != null) {
+        DiagnosticLogger.success(_connectOperationId!, data: {'url': _wsUrl});
+        _connectOperationId = null;
+      }
 
       _subscription = _channel!.stream.listen(
         _handleMessage,
@@ -82,32 +87,35 @@ class WebSocketService extends ChangeNotifier {
     } catch (e) {
       _errorMessage = e.toString();
       _updateState(WebSocketConnectionState.error);
-      debugPrint('WebSocket: ошибка подключения - $e');
+      if (_connectOperationId != null) {
+        DiagnosticLogger.failure(_connectOperationId!, e, data: {'url': _wsUrl});
+        _connectOperationId = null;
+      }
     }
   }
 
   // Отключение от WebSocket
   void disconnect() {
+    DiagnosticLogger.info('websocket', 'disconnect_requested', data: {'state': _state.name});
     _subscription?.cancel();
     _channel?.sink.close(status.normalClosure);
     _subscription = null;
     _channel = null;
     _updateState(WebSocketConnectionState.disconnected);
-    debugPrint('WebSocket: отключен');
   }
 
   // Отправка сообщения
   void send(Map<String, dynamic> message) {
     if (!isConnected) {
-      debugPrint('WebSocket: невозможно отправить сообщение - не подключен');
+      DiagnosticLogger.info('websocket', 'send_skipped_not_connected', data: {'message': message});
       return;
     }
 
     try {
       _channel?.sink.add(jsonEncode(message));
-      debugPrint('WebSocket: сообщение отправлено - $message');
+      DiagnosticLogger.info('websocket', 'message_sent', data: {'message': message});
     } catch (e) {
-      debugPrint('WebSocket: ошибка отправки сообщения - $e');
+      DiagnosticLogger.info('websocket', 'message_send_failed', data: {'message': message, 'error': e.toString()});
     }
   }
 
@@ -119,25 +127,28 @@ class WebSocketService extends ChangeNotifier {
           ? jsonDecode(firstDecode) as Map<String, dynamic>
           : firstDecode as Map<String, dynamic>;
 
-      debugPrint('WebSocket: получено сообщение - $message');
+      DiagnosticLogger.info('websocket', 'message_received', data: {'message': message});
 
       _messageController.add(message);
     } catch (e, stackTrace) {
-      debugPrint('WebSocket: ошибка парсинга сообщения - $e');
-      debugPrint('Stack trace: $stackTrace');
+      DiagnosticLogger.info(
+        'websocket',
+        'message_parse_failed',
+        data: {'error': e.toString(), 'stackTrace': stackTrace.toString()},
+      );
     }
   }
 
   void _handleError(error) {
     _errorMessage = error.toString();
     _updateState(WebSocketConnectionState.error);
-    debugPrint('WebSocket: ошибка - $error');
+    DiagnosticLogger.info('websocket', 'stream_error', data: {'error': error.toString()});
   }
 
   // Обработка закрытия соединения
   void _handleDone() {
     _updateState(WebSocketConnectionState.disconnected);
-    debugPrint('WebSocket: соединение закрыто');
+    DiagnosticLogger.info('websocket', 'connection_closed');
   }
 
   // Обновление состояния

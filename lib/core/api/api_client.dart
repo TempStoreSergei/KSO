@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:motel/core/navigation/app_navigator.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/core/services/token_service.dart';
 import 'api_exceptions.dart';
 
@@ -186,6 +187,11 @@ class ApiClient {
     String url, {
     Map<String, String>? headers,
   }) async {
+    final operationId = DiagnosticLogger.start(
+      'api',
+      'GET_RAW_URL',
+      data: {'url': url},
+    );
     final uri = Uri.parse(url);
     final baseUri = Uri.parse(_baseUrl);
     final sameOrigin =
@@ -204,14 +210,29 @@ class ApiClient {
       return await http.get(uri, headers: requestHeaders.isEmpty ? null : requestHeaders);
     }
 
-    var response = await sendOnce();
-    if (sameOrigin && _isUnauthorized(response) && await _ensureRefreshedAccessToken()) {
-      response = await sendOnce();
+    try {
+      var response = await sendOnce();
+      if (sameOrigin && _isUnauthorized(response) && await _ensureRefreshedAccessToken()) {
+        response = await sendOnce();
+      }
+      final data = {
+        'statusCode': response.statusCode,
+        'responseBytes': response.bodyBytes.length,
+      };
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        DiagnosticLogger.success(operationId, data: data);
+      } else {
+        DiagnosticLogger.failure(operationId, 'HTTP ${response.statusCode}', data: data);
+      }
+      return response;
+    } catch (e, stackTrace) {
+      DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace);
+      rethrow;
     }
-    return response;
   }
 
   Future<dynamic> get(String path, {Map<String, dynamic>? params}) async {
+    final operationId = _startApiOperation('GET', path, params: params);
     dynamic responseJson;
     try {
       var url = Uri.parse(_baseUrl + path);
@@ -227,10 +248,16 @@ class ApiClient {
         path,
         () async => http.get(url, headers: await _getHeaders()),
       );
-      responseJson = _processResponse(response);
-    } catch (e) {
+      responseJson = _processLoggedResponse(operationId, response);
+    } catch (e, stackTrace) {
       if (_isNetworkException(e)) {
+        if (DiagnosticLogger.isActive(operationId)) {
+          DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace, data: {'network': true});
+        }
         throw FetchDataException('Нет интернет-соединения');
+      }
+      if (DiagnosticLogger.isActive(operationId)) {
+        DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace);
       }
       rethrow;
     }
@@ -238,6 +265,7 @@ class ApiClient {
   }
 
   Future<dynamic> post(String path, {Map<String, dynamic>? body, Map<String, String>? headers}) async {
+    final operationId = _startApiOperation('POST', path, body: body);
     dynamic responseJson;
     try {
       final url = Uri.parse(_baseUrl + path);
@@ -260,10 +288,16 @@ class ApiClient {
         return await http.post(url, headers: requestHeaders, body: requestBody);
       });
 
-      responseJson = _processResponse(response);
-    } catch (e) {
+      responseJson = _processLoggedResponse(operationId, response);
+    } catch (e, stackTrace) {
       if (_isNetworkException(e)) {
+        if (DiagnosticLogger.isActive(operationId)) {
+          DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace, data: {'network': true});
+        }
         throw FetchDataException('Нет интернет-соединения');
+      }
+      if (DiagnosticLogger.isActive(operationId)) {
+        DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace);
       }
       rethrow;
     }
@@ -271,6 +305,7 @@ class ApiClient {
   }
 
   Future<dynamic> put(String path, {Map<String, dynamic>? body}) async {
+    final operationId = _startApiOperation('PUT', path, body: body);
     dynamic responseJson;
     try {
       final url = Uri.parse(_baseUrl + path);
@@ -278,10 +313,16 @@ class ApiClient {
         path,
         () async => http.put(url, headers: await _getHeaders(), body: (body == null) ? '' : jsonEncode(body)),
       );
-      responseJson = _processResponse(response);
-    } catch (e) {
+      responseJson = _processLoggedResponse(operationId, response);
+    } catch (e, stackTrace) {
       if (_isNetworkException(e)) {
+        if (DiagnosticLogger.isActive(operationId)) {
+          DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace, data: {'network': true});
+        }
         throw FetchDataException('Нет интернет-соединения');
+      }
+      if (DiagnosticLogger.isActive(operationId)) {
+        DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace);
       }
       rethrow;
     }
@@ -289,6 +330,7 @@ class ApiClient {
   }
 
   Future<dynamic> delete(String path, {Map<String, dynamic>? body}) async {
+    final operationId = _startApiOperation('DELETE', path, body: body);
     dynamic responseJson;
     try {
       final url = Uri.parse(_baseUrl + path);
@@ -300,10 +342,16 @@ class ApiClient {
             .send(request)
             .then((streamedResponse) => http.Response.fromStream(streamedResponse));
       });
-      responseJson = _processResponse(response);
-    } catch (e) {
+      responseJson = _processLoggedResponse(operationId, response);
+    } catch (e, stackTrace) {
       if (_isNetworkException(e)) {
+        if (DiagnosticLogger.isActive(operationId)) {
+          DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace, data: {'network': true});
+        }
         throw FetchDataException('Нет интернет-соединения');
+      }
+      if (DiagnosticLogger.isActive(operationId)) {
+        DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace);
       }
       rethrow;
     }
@@ -311,6 +359,7 @@ class ApiClient {
   }
 
   Future<dynamic> multipartPost(String path, XFile file) async {
+    final operationId = _startApiOperation('MULTIPART_POST', path, body: {'fileName': file.name});
     dynamic responseJson;
     try {
       final url = Uri.parse(_baseUrl + path);
@@ -335,10 +384,16 @@ class ApiClient {
       if (_shouldAttemptRefresh(path) && _isUnauthorized(response) && await _ensureRefreshedAccessToken()) {
         response = await sendOnce();
       }
-      responseJson = _processResponse(response);
-    } catch (e) {
+      responseJson = _processLoggedResponse(operationId, response);
+    } catch (e, stackTrace) {
       if (_isNetworkException(e)) {
+        if (DiagnosticLogger.isActive(operationId)) {
+          DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace, data: {'network': true});
+        }
         throw FetchDataException('Нет интернет-соединения');
+      }
+      if (DiagnosticLogger.isActive(operationId)) {
+        DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace);
       }
       rethrow;
     }
@@ -405,9 +460,11 @@ class ApiClient {
 
   // Метод для загрузки CSV файла с ценами на проживание
   Future<dynamic> loadRoomPrices(XFile file) async {
+    const path = '/transactions/load_room_prices';
+    final operationId = _startApiOperation('MULTIPART_POST', path, body: {'fileName': file.name});
     dynamic responseJson;
     try {
-      final url = Uri.parse('$_baseUrl/transactions/load_room_prices');
+      final url = Uri.parse('$_baseUrl$path');
       Future<http.Response> sendOnce() async {
         final request = http.MultipartRequest('POST', url);
         request.headers['accept'] = 'application/json';
@@ -429,10 +486,16 @@ class ApiClient {
       if (_isUnauthorized(response) && await _ensureRefreshedAccessToken()) {
         response = await sendOnce();
       }
-      responseJson = _processResponse(response);
-    } catch (e) {
+      responseJson = _processLoggedResponse(operationId, response);
+    } catch (e, stackTrace) {
       if (_isNetworkException(e)) {
+        if (DiagnosticLogger.isActive(operationId)) {
+          DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace, data: {'network': true});
+        }
         throw FetchDataException('Нет интернет-соединения');
+      }
+      if (DiagnosticLogger.isActive(operationId)) {
+        DiagnosticLogger.failure(operationId, e, stackTrace: stackTrace);
       }
       rethrow;
     }
@@ -447,12 +510,59 @@ class ApiClient {
 
   // Метод для печати чека
   Future<bool> printCheck(Map<String, dynamic> checkData) async {
+    final operationId = DiagnosticLogger.start(
+      'api',
+      'PRINT_CHECK',
+      data: {'path': '/payments/pay_order', 'body': checkData},
+    );
     try {
       await post('/payments/pay_order', body: checkData);
+      DiagnosticLogger.success(operationId);
       return true;
     } catch (e) {
+      DiagnosticLogger.failure(operationId, e);
       return false;
     }
+  }
+
+  String _startApiOperation(
+    String method,
+    String path, {
+    Map<String, dynamic>? params,
+    Map<String, dynamic>? body,
+  }) {
+    return DiagnosticLogger.start(
+      'api',
+      '$method $path',
+      data: {
+        'method': method,
+        'path': path,
+        if (params != null && params.isNotEmpty) 'params': params,
+        if (body != null && body.isNotEmpty) 'body': body,
+      },
+    );
+  }
+
+  dynamic _processLoggedResponse(String operationId, http.Response response) {
+    final data = {
+      'statusCode': response.statusCode,
+      'responseBytes': response.bodyBytes.length,
+      if (response.statusCode >= 400) 'bodyPreview': _responsePreview(response),
+    };
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      DiagnosticLogger.success(operationId, data: data);
+    } else {
+      DiagnosticLogger.failure(operationId, 'HTTP ${response.statusCode}', data: data);
+    }
+
+    return _processResponse(response);
+  }
+
+  String _responsePreview(http.Response response) {
+    final body = utf8.decode(response.bodyBytes);
+    if (body.length <= 300) return body;
+    return '${body.substring(0, 300)}...';
   }
 
   bool _isNetworkException(Object error) {

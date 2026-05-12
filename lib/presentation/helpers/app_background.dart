@@ -11,7 +11,7 @@ import 'package:motel/presentation/helpers/animated_background.dart';
 class AppBackground extends StatefulWidget {
   final Widget child;
 
-  const AppBackground({Key? key, required this.child}) : super(key: key);
+  const AppBackground({super.key, required this.child});
 
   @override
   State<AppBackground> createState() => _AppBackgroundState();
@@ -61,7 +61,7 @@ class _AppBackgroundState extends State<AppBackground> {
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const LightHomeKitBackground(),
           ),
-          Container(color: Colors.black.withOpacity(0.2)),
+          Container(color: Colors.black.withValues(alpha: 0.2)),
           BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
             child: Container(color: Colors.transparent),

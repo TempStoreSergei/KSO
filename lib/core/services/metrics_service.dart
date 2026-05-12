@@ -3,6 +3,7 @@
 // ============================================
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 
 class PaymentMetrics {
   final int successfulPayments;
@@ -81,12 +82,12 @@ class MetricsService {
 
   /// Зафиксировать выбор корпуса
   void recordBuildingSelection(String buildingId) {
-    print('[MetricsService] Building selected: $buildingId');
+    DiagnosticLogger.info('metrics', 'building_selected', data: {'buildingId': buildingId});
   }
 
   /// Зафиксировать выбор комнаты
   void recordRoomSelection(String roomInfo) {
-    print('[MetricsService] Room selected: $roomInfo');
+    DiagnosticLogger.info('metrics', 'room_selected', data: {'room': roomInfo});
   }
 
   /// Сбросить все метрики (для тестирования или сброса статистики)

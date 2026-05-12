@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 
 class StepPaymentSuccess extends StatefulWidget {

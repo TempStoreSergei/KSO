@@ -3,6 +3,7 @@
 // ============================================
 
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/domain/entities/api_service.dart';
 
 class EditServiceUseCase {
@@ -18,7 +19,7 @@ class EditServiceUseCase {
     required int tax,
   }) async {
     try {
-      print("[EditServiceUseCase] Редактирование услуги ID: $serviceId");
+      DiagnosticLogger.info('services', 'edit_started', data: {'serviceId': serviceId});
 
       final response = await _apiClient.put(
         '/services/$serviceId',
@@ -29,10 +30,10 @@ class EditServiceUseCase {
         },
       );
 
-      print("[EditServiceUseCase] Услуга успешно обновлена");
+      DiagnosticLogger.info('services', 'edit_succeeded', data: {'serviceId': serviceId});
       return ApiService.fromJson(response as Map<String, dynamic>);
     } catch (e) {
-      print("[EditServiceUseCase] Ошибка: $e");
+      DiagnosticLogger.info('services', 'edit_failed', data: {'serviceId': serviceId, 'error': e.toString()});
       throw Exception('Ошибка при редактировании услуги: $e');
     }
   }

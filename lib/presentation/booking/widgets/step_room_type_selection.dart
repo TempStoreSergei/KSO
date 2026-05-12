@@ -3,7 +3,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:motel/domain/models/booking_models.dart';
 import 'package:motel/presentation/booking/cubit/booking_cubit.dart';
-import 'package:motel/presentation/booking/cubit/booking_state.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 
 class StepRoomTypeSelection extends StatelessWidget {

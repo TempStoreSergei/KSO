@@ -2,9 +2,11 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/payment_flow_tracker.dart';
 import 'package:motel/core/services/websocket_service.dart';
-import 'package:motel/core/services/tax_settings_service.dart';
 import 'package:motel/domain/models/booking_models.dart';
+import 'package:motel/domain/usecases/payment_hardware_usecase.dart';
+import 'package:motel/domain/usecases/print_booking_check_usecase.dart';
 import 'package:motel/domain/usecases/save_transaction_usecase.dart';
 import 'package:motel/presentation/booking/widgets/step_container.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -47,10 +49,22 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   bool _isTimingOut = false;
   bool _hasHandledSuccessfulPayment = false;
   bool _isDeviceReady = false;
+  late final PaymentHardwareUseCase _paymentHardware;
+  late final PrintBookingCheckUseCase _printBookingCheck;
+  late final SaveTransactionUseCase _saveTransaction;
+  late final PaymentFlowTracker _tracker;
 
   @override
   void initState() {
     super.initState();
+    _paymentHardware = PaymentHardwareUseCase(ApiClient.instance);
+    _printBookingCheck = PrintBookingCheckUseCase(ApiClient.instance);
+    _saveTransaction = SaveTransactionUseCase(ApiClient.instance);
+    _tracker = PaymentFlowTracker()
+      ..start(
+        paymentMethod: widget.paymentMethod,
+        amount: widget.totalPrice,
+      );
     widget.webSocketService.connect();
     _totalSeconds = widget.paymentMethod == 'Наличные' ? 300 : 120;
     _remainingSeconds = _totalSeconds;
@@ -60,23 +74,19 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
 
   Future<void> _startPayment() async {
     try {
-      if (widget.paymentMethod == 'Наличные') {
-        await ApiClient.instance.get(
-          '/cash_system/start_accepting_payment',
-          params: {'amount': widget.totalPrice},
-        );
-      } else if (widget.paymentMethod == 'Карта') {
-        await ApiClient.instance.get(
-          '/acquiring/start_payment',
-          params: {'amount': widget.totalPrice},
-        );
+      _tracker.mark('payment_start_requested');
+      if (_isCashPayment) {
+        await _paymentHardware.startCashPayment(amount: widget.totalPrice);
+      } else if (_isCardPayment) {
+        await _paymentHardware.startCardPayment(amount: widget.totalPrice);
       }
-      // Устройство ответило — запускаем таймер
       if (mounted) {
+        _tracker.mark('device_ready');
         setState(() => _isDeviceReady = true);
         _startPaymentTimer();
       }
     } catch (e) {
+      _tracker.finish('hardware_start_failed', data: {'error': e.toString()});
       if (widget.onHardwareError != null) {
         widget.onHardwareError!('Оборудование не отвечает: $e', () async => false);
       } else {
@@ -87,10 +97,11 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
 
   Future<void> _cancelPayment() async {
     if (_isCancelling) return;
+    _tracker.mark('cancel_requested', data: {'collectedAmount': _collectedAmount});
     setState(() => _isCancelling = true);
     try {
-      if (widget.paymentMethod == 'Наличные') {
-        await ApiClient.instance.get('/cash_system/stop_accepting_payment');
+      if (_isCashPayment) {
+        await _stopCashAcceptance(reason: 'cancel');
         final canLeavePayment = await _dispenseInsertedCashBeforeExit();
         if (!canLeavePayment) {
           if (mounted) {
@@ -102,9 +113,11 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
       _paymentTimer?.cancel();
       _socketSubscription?.cancel();
       if (mounted) {
+        _tracker.finish('cancelled', data: {'returnedAmount': _collectedAmount});
         widget.onCancel?.call();
       }
-    } catch (_) {
+    } catch (e) {
+      _tracker.mark('cancel_failed', data: {'error': e.toString()});
       if (mounted) {
         setState(() => _isCancelling = false);
       }
@@ -117,16 +130,18 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
       final eventData = message['data'];
 
       if (eventType == 'acceptedBill') {
-        // Обновление собранной суммы для наличных
         final collectedAmount = eventData is Map ? _readInt(eventData['collected_amount']) : null;
         if (mounted && collectedAmount != null) {
+          _tracker.mark('cash_accepted', data: {'collectedAmount': collectedAmount});
           setState(() {
             _collectedAmount = collectedAmount;
           });
         }
       } else if (eventType == 'successPayment') {
+        _tracker.mark('success_payment_event');
         _handleSuccessfulPayment(eventData);
       } else if (eventType == 'errorPayment') {
+        _tracker.finish('payment_error_event');
         widget.onPaymentError();
       }
     });
@@ -138,17 +153,16 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     _paymentTimer?.cancel();
     try {
       _syncCollectedAmount(eventData);
+      _tracker.mark('print_check_started');
       final isCheckPrinted = await _printCheck();
       if (isCheckPrinted) {
-        final useCase = SaveTransactionUseCase(ApiClient.instance);
-        await useCase.call(widget.data);
+        _tracker.mark('print_check_succeeded');
+        await _saveTransactionOrThrow(reason: 'payment_completed');
+        _tracker.finish('completed', data: {'collectedAmount': _collectedAmount});
         widget.onPaymentComplete();
       } else {
-        // Сохраняем транзакцию даже если чек не напечатался
-        try {
-          final useCase = SaveTransactionUseCase(ApiClient.instance);
-          await useCase.call(widget.data);
-        } catch (_) {}
+        _tracker.mark('print_check_failed');
+        await _saveTransactionSilently(reason: 'print_check_failed');
         if (widget.onHardwareError != null) {
           widget.onHardwareError!('Не удалось напечатать чек. Обратитесь к администратору.', _printCheck);
         } else {
@@ -156,11 +170,8 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
         }
       }
     } catch (e) {
-      // Сохраняем транзакцию даже при ошибке оборудования
-      try {
-        final useCase = SaveTransactionUseCase(ApiClient.instance);
-        await useCase.call(widget.data);
-      } catch (_) {}
+      _tracker.mark('success_handling_failed', data: {'error': e.toString()});
+      await _saveTransactionSilently(reason: 'success_handling_failed');
       if (widget.onHardwareError != null) {
         widget.onHardwareError!('Ошибка оборудования: $e', _printCheck);
       } else {
@@ -176,6 +187,7 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     if (collectedAmount == null) return;
 
     _collectedAmount = collectedAmount;
+    _tracker.mark('cash_amount_synced', data: {'collectedAmount': collectedAmount});
     if (mounted) {
       setState(() {});
     }
@@ -189,21 +201,21 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   }
 
   Future<bool> _dispenseCashChange(int amount) async {
-    if (widget.paymentMethod != 'Наличные' || amount <= 0) return true;
+    if (!_isCashPayment || amount <= 0) return true;
 
     try {
-      await ApiClient.instance.get(
-        '/cash_system/dispense_change',
-        params: {'amount': amount},
-      );
+      _tracker.mark('cash_return_started', data: {'amount': amount});
+      await _paymentHardware.dispenseCash(amount: amount);
+      _tracker.mark('cash_return_succeeded', data: {'amount': amount});
       return true;
-    } catch (_) {
+    } catch (e) {
+      _tracker.mark('cash_return_failed', data: {'amount': amount, 'error': e.toString()});
       return false;
     }
   }
 
   Future<bool> _dispenseInsertedCashBeforeExit() async {
-    if (widget.paymentMethod != 'Наличные' || _collectedAmount <= 0) return true;
+    if (!_isCashPayment || _collectedAmount <= 0) return true;
 
     while (mounted) {
       final isDispensed = await _dispenseCashChange(_collectedAmount);
@@ -242,55 +254,35 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   }
 
   Future<bool> _printCheck() async {
-    final items = widget.data.selectedItems.map((item) {
-      return {
-        "name": item.name,
-        "price": item.price,
-        "quantity": item.quantity,
-        "tax": item.tax,
-        "objectType": 4, // Всегда 4
-      };
-    }).toList();
-
-    // Если услуги не выбраны (пустой список), добавляем услугу по умолчанию
-    if (items.isEmpty && widget.data.selectedCategory == BookingCategory.accommodation) {
-      // Получаем налоговую ставку из настроек
-      final defaultTax = await TaxSettingsService.getDefaultAccommodationTax();
-
-      items.add({
-        "name": "Предоставление койко-мест для временного размещения",
-        "price": widget.totalPrice,
-        "quantity": 1,
-        "tax": defaultTax,
-        "objectType": 4,
-      });
-    }
-
-    final fio = [
-      widget.data.lastName ?? '',
-      widget.data.firstName ?? '',
-      widget.data.middleName ?? '',
-    ].where((s) => s.isNotEmpty).join(' ');
-
-    final checkData = {
-      "items": items,
-      "paymentType": _getPaymentTypeCode(widget.paymentMethod),
-      "summ": widget.totalPrice,
-      "fio": fio,
-      "phoneNumber": widget.data.phoneNumber ?? '',
-    };
-
-    return await ApiClient.instance.printCheck(checkData);
+    return await _printBookingCheck.call(
+      data: widget.data,
+      paymentMethod: widget.paymentMethod,
+      totalPrice: widget.totalPrice,
+    );
   }
 
-  int _getPaymentTypeCode(String paymentMethod) {
-    switch (paymentMethod) {
-      case 'Карта':
-        return 1;
-      case 'Наличные':
-        return 0;
-      default:
-        return 1; // СБП or other
+  Future<void> _saveTransactionSilently({required String reason}) async {
+    try {
+      await _saveTransactionOrThrow(reason: reason);
+    } catch (e) {
+      _tracker.mark('transaction_save_failed', data: {'reason': reason, 'error': e.toString()});
+    }
+  }
+
+  Future<void> _saveTransactionOrThrow({required String reason}) async {
+    _tracker.mark('transaction_save_started', data: {'reason': reason});
+    await _saveTransaction.call(widget.data);
+    _tracker.mark('transaction_save_succeeded', data: {'reason': reason});
+  }
+
+  Future<void> _stopCashAcceptance({required String reason}) async {
+    try {
+      _tracker.mark('cash_acceptance_stop_started', data: {'reason': reason});
+      await _paymentHardware.stopCashPayment();
+      _tracker.mark('cash_acceptance_stop_succeeded', data: {'reason': reason});
+    } catch (e) {
+      _tracker.mark('cash_acceptance_stop_failed', data: {'reason': reason, 'error': e.toString()});
+      rethrow;
     }
   }
 
@@ -316,17 +308,25 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   Future<void> _handlePaymentTimeout() async {
     if (_isTimingOut || _isCancelling || _hasHandledSuccessfulPayment) return;
     _isTimingOut = true;
+    _tracker.mark('timeout_started', data: {'collectedAmount': _collectedAmount});
 
-    if (widget.paymentMethod == 'Наличные') {
+    if (_isCashPayment) {
       try {
-        await ApiClient.instance.get('/cash_system/stop_accepting_payment');
-      } catch (_) {}
+        await _stopCashAcceptance(reason: 'timeout');
+      } catch (_) {
+        // Timeout must never trigger dispense_change or block the user flow.
+      }
     }
 
     if (mounted) {
+      _tracker.finish('timeout', data: {'collectedAmount': _collectedAmount});
       widget.onPaymentTimeout();
     }
   }
+
+  bool get _isCashPayment => widget.paymentMethod == 'Наличные';
+
+  bool get _isCardPayment => widget.paymentMethod == 'Карта';
 
   @override
   void dispose() {

@@ -1,5 +1,6 @@
 // lib/domain/entities/screensaver_file.dart
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 
 /// Сущность, представляющая один файл заставки.
 class ScreensaverFile {
@@ -31,7 +32,7 @@ class ScreensaverFile {
 
     // Проверка на случай, если BASE_URL не загружен
     if (baseUrl == null) {
-      print("КРИТИЧЕСКАЯ ОШИБКА: Переменная BASE_URL не найдена в .env файле.");
+      DiagnosticLogger.info('screensaver', 'base_url_missing');
       // Возвращаем пустую строку, чтобы избежать падения, но в консоли будет ошибка
       return '';
     }

@@ -1,6 +1,7 @@
 // lib/data/repositories/settings_repository_impl.dart
 
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/domain/repositories/settings_repository.dart';
 
 /// Конкретная реализация контракта `SettingsRepository`.
@@ -25,7 +26,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
       );
     } catch (e) {
       // Логируем ошибку и перебрасываем ее выше, чтобы UI мог ее обработать.
-      print('Ошибка при смене пароля: $e');
+      DiagnosticLogger.info('settings', 'update_password_failed', data: {'error': e.toString()});
       rethrow;
     }
   }

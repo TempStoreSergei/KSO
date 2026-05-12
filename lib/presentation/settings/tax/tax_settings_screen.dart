@@ -98,9 +98,9 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
         content: const Text('Настройки сохранены'),
         actions: [
           CupertinoDialogAction(
-            child: const Text('OK'),
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
           )
         ],
       ),
@@ -116,9 +116,9 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
         content: Text(message),
         actions: [
           CupertinoDialogAction(
-            child: const Text('OK'),
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
           )
         ],
       ),

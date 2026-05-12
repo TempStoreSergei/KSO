@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 /// заметными, мягкими и пастельными источниками света, которые
 /// добавляют глубину и цвет, не перегружая интерфейс.
 class LightHomeKitBackground extends StatelessWidget {
-  const LightHomeKitBackground({Key? key}) : super(key: key);
+  const LightHomeKitBackground({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -57,8 +57,8 @@ class LightHomeKitBackground extends StatelessWidget {
           gradient: RadialGradient(
             colors: [
               // Интенсивность свечения на светлом фоне должна быть ниже
-              color.withOpacity(0.4),
-              color.withOpacity(0.0),
+              color.withValues(alpha: 0.4),
+              color.withValues(alpha: 0.0),
             ],
           ),
         ),

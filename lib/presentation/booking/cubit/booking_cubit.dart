@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:motel/core/api/api_client.dart'; // Импортируем ApiClient
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/domain/models/booking_models.dart';
 import 'package:motel/presentation/booking/cubit/booking_state.dart';
 import 'package:motel/domain/usecases/get_rooms.dart';
@@ -59,7 +60,7 @@ class BookingCubit extends Cubit<BookingState> {
           );
           setCalculatedRoomPrice(price);
         } catch (e) {
-          print('Ошибка при расчете цены: $e');
+          DiagnosticLogger.info('booking', 'room_price_calculation_failed', data: {'error': e.toString()});
           setCalculatedRoomPrice(null);
         }
       }
@@ -109,7 +110,7 @@ class BookingCubit extends Cubit<BookingState> {
         // Обновляем состояние с рассчитанной ценой
         setCalculatedRoomPrice(price);
       } catch (e) {
-        print('Ошибка при расчете цены: $e');
+        DiagnosticLogger.info('booking', 'room_price_calculation_failed', data: {'error': e.toString()});
         // Можно обработать ошибку, например, сбросить цену
         setCalculatedRoomPrice(null);
       }

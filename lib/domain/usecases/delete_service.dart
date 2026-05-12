@@ -3,6 +3,7 @@
 // ============================================
 
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 
 class DeleteServiceUseCase {
   final ApiClient _apiClient;
@@ -12,13 +13,13 @@ class DeleteServiceUseCase {
   /// Удалить услугу по ID
   Future<void> execute(int serviceId) async {
     try {
-      print("[DeleteServiceUseCase] Удаление услуги с ID: $serviceId");
+      DiagnosticLogger.info('services', 'delete_started', data: {'serviceId': serviceId});
 
       await _apiClient.delete('/services/$serviceId');
 
-      print("[DeleteServiceUseCase] Услуга успешно удалена");
+      DiagnosticLogger.info('services', 'delete_succeeded', data: {'serviceId': serviceId});
     } catch (e) {
-      print("[DeleteServiceUseCase] Ошибка: $e");
+      DiagnosticLogger.info('services', 'delete_failed', data: {'serviceId': serviceId, 'error': e.toString()});
       throw Exception('Ошибка при удалении услуги: $e');
     }
   }

@@ -347,7 +347,7 @@ class _StepItemSelectionState extends State<StepItemSelection> {
         children: [
           CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: 44,
+            minimumSize: const Size(44, 44),
             onPressed: () => _updateItemQuantity(selectedItem, selectedItem.quantity - 1),
             child: Container(
               width: 44,
@@ -376,7 +376,7 @@ class _StepItemSelectionState extends State<StepItemSelection> {
           ),
           CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: 44,
+            minimumSize: const Size(44, 44),
             onPressed: () => _updateItemQuantity(selectedItem, selectedItem.quantity + 1),
             child: Container(
               width: 44,

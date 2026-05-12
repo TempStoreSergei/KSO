@@ -1,5 +1,6 @@
 
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/domain/models/booking_models.dart';
 import 'package:motel/domain/models/save_transaction_request.dart';
 import 'package:motel/presentation/booking/formatters/ru_phone.dart';
@@ -13,10 +14,21 @@ class SaveTransactionUseCase {
     final requestModel = _mapBookingDataToRequest(bookingData);
 
     try {
-      await _apiClient.post(
+      final response = await _apiClient.post(
         '/transactions/save_transaction',
         body: requestModel.toJson(),
       );
+      if (response is Map) {
+        final serverTransactionId = response['transactionId'] ?? response['transactionID'] ?? response['id'];
+        if (serverTransactionId != null) {
+          DiagnosticLogger.updateContext({'serverTransactionId': serverTransactionId});
+          DiagnosticLogger.info(
+            'transactions',
+            'save_transaction_bound_to_server_id',
+            data: {'serverTransactionId': serverTransactionId},
+          );
+        }
+      }
     } catch (e) {
       throw Exception('Не удалось сохранить бронирование: $e');
     }

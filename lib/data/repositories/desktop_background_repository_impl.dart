@@ -1,4 +1,5 @@
 import 'package:image_picker/image_picker.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/data/datasources/desktop_background_remote_data_source.dart';
 import 'package:motel/domain/entities/desktop_background_entity.dart';
 import 'package:motel/domain/repositories/desktop_background_repository.dart';
@@ -15,7 +16,7 @@ class DesktopBackgroundRepositoryImpl implements DesktopBackgroundRepository {
       // Метод источника данных уже может вернуть null, поэтому просто передаем результат.
       return await remoteDataSource.getDesktopBackground();
     } catch (e) {
-      print('Ошибка получения фона рабочего стола: $e');
+      DiagnosticLogger.info('desktop_background', 'get_failed', data: {'error': e.toString()});
       return null;
     }
   }
@@ -26,7 +27,7 @@ class DesktopBackgroundRepositoryImpl implements DesktopBackgroundRepository {
       await remoteDataSource.addDesktopBackground(file);
       return true;
     } catch (e) {
-      print('Ошибка добавления фона: $e');
+      DiagnosticLogger.info('desktop_background', 'add_failed', data: {'error': e.toString()});
       return false;
     }
   }
@@ -37,7 +38,7 @@ class DesktopBackgroundRepositoryImpl implements DesktopBackgroundRepository {
       await remoteDataSource.deleteDesktopBackground(fileID);
       return true;
     } catch (e) {
-      print('Ошибка удаления фона: $e');
+      DiagnosticLogger.info('desktop_background', 'delete_failed', data: {'fileID': fileID, 'error': e.toString()});
       return false;
     }
   }

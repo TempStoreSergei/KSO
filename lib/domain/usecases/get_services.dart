@@ -3,6 +3,7 @@
 // ============================================
 
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/services/diagnostic_logger.dart';
 import 'package:motel/domain/entities/api_service.dart';
 
 class GetServices {
@@ -12,7 +13,7 @@ class GetServices {
 
   Future<List<ApiService>> call() async {
     try {
-      print("[GetServices] Выполняю запрос на /guests/get_services...");
+      DiagnosticLogger.info('services', 'get_started');
 
       // === ИСПРАВЛЕНИЕ: 'responseData' теперь является Map<String, dynamic>, а не Response ===
       final responseData = await _apiClient.get('/services/get_services');
@@ -26,11 +27,11 @@ class GetServices {
       // Преобразуем каждый JSON-объект в наш класс ApiService
       final List<ApiService> services = servicesJson.map((json) => ApiService.fromJson(json)).toList();
 
-      print("[GetServices] Успешно загружено и распарсено ${services.length} сервисов.");
+      DiagnosticLogger.info('services', 'get_succeeded', data: {'count': services.length});
       return services;
 
     } catch (e) {
-      print("[GetServices] КРИТИЧЕСКАЯ ОШИБКА: $e");
+      DiagnosticLogger.info('services', 'get_failed', data: {'error': e.toString()});
       // Перебрасываем исключение, чтобы FutureBuilder мог его поймать и показать ошибку
       throw Exception('Не удалось загрузить сервисы из-за ошибки: $e');
     }

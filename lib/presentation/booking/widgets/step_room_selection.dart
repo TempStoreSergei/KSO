@@ -1,6 +1,3 @@
-import 'dart:ui';
-
-import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:motel/data/models/room_model.dart';
@@ -44,12 +41,6 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
     widget.searchFocusNode.unfocus();
   }
 
-  void _handleBackPressed() {
-    setState(() => _selectedRoomNumber = null);
-    widget.onViewChange(false); // Notify parent that we are back to room number view
-    widget.searchFocusNode.requestFocus();
-  }
-
   String _getRoomTypeName(RoomType type) {
     switch (type) {
       case RoomType.fourBed:
@@ -89,7 +80,10 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
 
   Widget _buildRoomNumberSelection(
       BuildContext context, BookingState state, List<Room> rooms) {
-    final groupedRooms = groupBy(rooms, (Room room) => room.roomNumber);
+    final groupedRooms = <String, List<Room>>{};
+    for (final room in rooms) {
+      groupedRooms.putIfAbsent(room.roomNumber, () => []).add(room);
+    }
     final roomNumbers = groupedRooms.keys.toList()..sort((a, b) => int.parse(a).compareTo(int.parse(b)));
 
     final filteredRoomNumbers = roomNumbers
@@ -130,7 +124,6 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
                   ),
                   itemBuilder: (context, index) {
                     final roomNumber = filteredRoomNumbers[index];
-                    final beds = groupedRooms[roomNumber]!;
                     final isSelected =
                         state.bookingData.selectedRoom?.roomNumber == roomNumber;
 
@@ -140,7 +133,7 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
                         height: 40,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? CupertinoColors.activeBlue.withOpacity(0.2)
+                              ? CupertinoColors.activeBlue.withValues(alpha: 0.2)
                               : const Color(0xFF2C2C2E),
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -155,7 +148,7 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
                               color: CupertinoColors.white, fontSize: 17)),
                       onTap: () => _handleRoomNumberSelected(roomNumber),
                       backgroundColor: isSelected
-                          ? CupertinoColors.activeBlue.withOpacity(0.2)
+                          ? CupertinoColors.activeBlue.withValues(alpha: 0.2)
                           : const Color(0xFF1C1C1E),
                       trailing: const Icon(CupertinoIcons.chevron_right,
                           color: CupertinoColors.systemGrey3),
@@ -203,7 +196,7 @@ class _StepRoomSelectionState extends State<StepRoomSelection> {
                             color: CupertinoColors.white, fontSize: 17)),
                     onTap: () async => await context.read<BookingCubit>().setRoom(room),
                     backgroundColor: isSelected
-                        ? CupertinoColors.activeBlue.withOpacity(0.2)
+                        ? CupertinoColors.activeBlue.withValues(alpha: 0.2)
                         : const Color(0xFF1C1C1E),
                     trailing: isSelected
                         ? const Icon(CupertinoIcons.checkmark_circle_fill,
