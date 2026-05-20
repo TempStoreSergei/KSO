@@ -618,6 +618,10 @@ class _TimelineEventTile extends StatelessWidget {
         return 'Транзакция сохранена';
       case 'timeout_started':
         return 'Истекло время оплаты';
+      case 'partial_payment_prompt_shown':
+        return 'Показано продление неполной оплаты';
+      case 'partial_payment_extended':
+        return 'Прием оплаты продлен';
       case 'cash_acceptance_stop_started':
         return 'Остановка приема наличных';
       case 'cash_return_started':

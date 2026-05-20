@@ -40,14 +40,22 @@ class StepPaymentExecution extends StatefulWidget {
 }
 
 class _StepPaymentExecutionState extends State<StepPaymentExecution> {
+  static const int _cashPaymentSeconds = 300;
+  static const int _nonCashPaymentSeconds = 120;
+  static const int _partialPaymentDecisionSeconds = 120;
+  static const int _cashPaymentExtensionSeconds = 300;
+
   Timer? _paymentTimer;
   late int _remainingSeconds;
   late int _totalSeconds;
   StreamSubscription? _socketSubscription;
   int _collectedAmount = 0; // Собранная сумма в копейках
+  int? _partialPaymentPromptRemainingSeconds;
   bool _isCancelling = false;
   bool _isTimingOut = false;
   bool _hasHandledSuccessfulPayment = false;
+  bool _hasExtendedPartialPayment = false;
+  bool _isPartialPaymentDialogOpen = false;
   bool _isDeviceReady = false;
   late final PaymentHardwareUseCase _paymentHardware;
   late final PrintBookingCheckUseCase _printBookingCheck;
@@ -66,7 +74,7 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
         amount: widget.totalPrice,
       );
     widget.webSocketService.connect();
-    _totalSeconds = widget.paymentMethod == 'Наличные' ? 300 : 120;
+    _totalSeconds = widget.paymentMethod == 'Наличные' ? _cashPaymentSeconds : _nonCashPaymentSeconds;
     _remainingSeconds = _totalSeconds;
     _listenToPaymentEvents();
     _startPayment();
@@ -136,6 +144,9 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
           setState(() {
             _collectedAmount = collectedAmount;
           });
+          if (collectedAmount >= widget.totalPrice) {
+            _dismissPartialPaymentDialog();
+          }
         }
       } else if (eventType == 'successPayment') {
         _tracker.mark('success_payment_event');
@@ -151,6 +162,7 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     if (_hasHandledSuccessfulPayment) return;
     _hasHandledSuccessfulPayment = true;
     _paymentTimer?.cancel();
+    _dismissPartialPaymentDialog();
     try {
       _syncCollectedAmount(eventData);
       _tracker.mark('print_check_started');
@@ -289,37 +301,83 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   void _startPaymentTimer() {
     _paymentTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       var shouldHandleTimeout = false;
+      var shouldShowPartialPaymentDialog = false;
+      var timeoutReason = 'timeout';
 
       setState(() {
-        if (_remainingSeconds > 0) {
+        if (_partialPaymentPromptRemainingSeconds != null) {
+          if (_partialPaymentPromptRemainingSeconds! > 0) {
+            _partialPaymentPromptRemainingSeconds = _partialPaymentPromptRemainingSeconds! - 1;
+          }
+
+          if (_partialPaymentPromptRemainingSeconds == 0 && _hasPartialCashPayment && !_hasExtendedPartialPayment) {
+            _paymentTimer?.cancel();
+            shouldHandleTimeout = true;
+            timeoutReason = 'partial_payment_auto_cancel';
+          }
+        } else if (_remainingSeconds > 0) {
           _remainingSeconds--;
+          if (_remainingSeconds > 0) return;
+          _remainingSeconds = 0;
+
+          if (_hasPartialCashPayment && !_hasExtendedPartialPayment) {
+            shouldShowPartialPaymentDialog = true;
+            return;
+          }
+
+          _paymentTimer?.cancel();
+          shouldHandleTimeout = true;
         } else {
+          _remainingSeconds = 0;
+
+          if (_hasPartialCashPayment && !_hasExtendedPartialPayment) {
+            shouldShowPartialPaymentDialog = true;
+            return;
+          }
+
           _paymentTimer?.cancel();
           shouldHandleTimeout = true;
         }
       });
 
       if (shouldHandleTimeout) {
-        _handlePaymentTimeout();
+        _dismissPartialPaymentDialog();
+        _handlePaymentTimeout(reason: timeoutReason);
+      } else if (shouldShowPartialPaymentDialog) {
+        _showPartialPaymentExtensionDialog();
       }
     });
   }
 
-  Future<void> _handlePaymentTimeout() async {
+  Future<void> _handlePaymentTimeout({String reason = 'timeout'}) async {
     if (_isTimingOut || _isCancelling || _hasHandledSuccessfulPayment) return;
     _isTimingOut = true;
-    _tracker.mark('timeout_started', data: {'collectedAmount': _collectedAmount});
+    _tracker.mark('timeout_started', data: {'collectedAmount': _collectedAmount, 'reason': reason});
 
     if (_isCashPayment) {
       try {
-        await _stopCashAcceptance(reason: 'timeout');
+        await _stopCashAcceptance(reason: reason);
+        final canLeavePayment = await _dispenseInsertedCashBeforeExit();
+        if (!canLeavePayment) {
+          if (mounted) {
+            setState(() => _isTimingOut = false);
+          }
+          return;
+        }
       } catch (_) {
-        // Timeout must never trigger dispense_change or block the user flow.
+        // Timeout must not block the user flow if cash acceptance cannot be stopped.
       }
     }
 
     if (mounted) {
-      _tracker.finish('timeout', data: {'collectedAmount': _collectedAmount});
+      _tracker.finish(
+        'timeout',
+        data: {
+          'collectedAmount': _collectedAmount,
+          'returnedAmount': _isCashPayment ? _collectedAmount : 0,
+          'reason': reason,
+        },
+      );
       widget.onPaymentTimeout();
     }
   }
@@ -327,6 +385,84 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
   bool get _isCashPayment => widget.paymentMethod == 'Наличные';
 
   bool get _isCardPayment => widget.paymentMethod == 'Карта';
+
+  bool get _hasPartialCashPayment => _isCashPayment && _collectedAmount > 0 && _collectedAmount < widget.totalPrice;
+
+  bool get _isPartialPaymentPromptVisible =>
+      _partialPaymentPromptRemainingSeconds != null &&
+      _hasPartialCashPayment &&
+      !_hasExtendedPartialPayment &&
+      !_isCancelling &&
+      !_isTimingOut &&
+      !_hasHandledSuccessfulPayment;
+
+  void _showPartialPaymentExtensionDialog() {
+    if (!mounted ||
+        _isPartialPaymentDialogOpen ||
+        _partialPaymentPromptRemainingSeconds != null ||
+        !_hasPartialCashPayment ||
+        _hasExtendedPartialPayment) {
+      return;
+    }
+
+    setState(() {
+      _partialPaymentPromptRemainingSeconds = _partialPaymentDecisionSeconds;
+    });
+    _isPartialPaymentDialogOpen = true;
+    _tracker.mark(
+      'partial_payment_prompt_shown',
+      data: {
+        'collectedAmount': _collectedAmount,
+        'totalPrice': widget.totalPrice,
+        'remainingSeconds': _remainingSeconds,
+      },
+    );
+
+    unawaited(
+      showCupertinoDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('Оплата внесена не полностью'),
+          content: const Text('Сумма внесена не полностью. Продлить время приема оплаты?'),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Продлить прием оплаты'),
+            ),
+          ],
+        ),
+      ).then((shouldExtend) {
+        _isPartialPaymentDialogOpen = false;
+        if (!mounted || shouldExtend != true) return;
+        _extendCashPaymentAcceptance();
+      }),
+    );
+  }
+
+  void _dismissPartialPaymentDialog() {
+    if (!_isPartialPaymentDialogOpen || !mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(false);
+  }
+
+  void _extendCashPaymentAcceptance() {
+    if (!_isPartialPaymentPromptVisible) return;
+
+    _tracker.mark(
+      'partial_payment_extended',
+      data: {
+        'collectedAmount': _collectedAmount,
+        'totalPrice': widget.totalPrice,
+      },
+    );
+    setState(() {
+      _remainingSeconds = _cashPaymentExtensionSeconds;
+      _totalSeconds = _cashPaymentExtensionSeconds;
+      _partialPaymentPromptRemainingSeconds = null;
+      _hasExtendedPartialPayment = true;
+    });
+  }
 
   @override
   void dispose() {
@@ -341,7 +477,12 @@ class _StepPaymentExecutionState extends State<StepPaymentExecution> {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
-  double get _progressValue => _remainingSeconds / _totalSeconds;
+  double get _progressValue {
+    if (_totalSeconds <= 0) return 0;
+
+    final value = _remainingSeconds / _totalSeconds;
+    return value.clamp(0.0, 1.0).toDouble();
+  }
 
   Color get _progressColor {
     if (_remainingSeconds > 60) {
