@@ -1,5 +1,6 @@
 // lib/domain/usecases/shift/manage_shift_usecase.dart
 import 'package:motel/core/services/logger_service.dart';
+import 'package:motel/core/services/shift_service.dart';
 import 'package:motel/domain/models/shift_automation_settings.dart';
 import 'package:motel/domain/models/shift_models.dart';
 import 'package:motel/domain/repositories/shift_repository.dart';
@@ -17,6 +18,13 @@ class ManageShiftUseCase {
   }) {
     logger.debug(LogCategory.shift, 'ManageShiftUseCase: getStatus');
     return _repository.getShiftStatus(deviceId: deviceId, silent: silent);
+  }
+
+  /// Open fiscal connection
+  Future<void> openFiscalConnection({String deviceId = 'default'}) {
+    logger.debug(LogCategory.shift, 'ManageShiftUseCase: openFiscalConnection');
+    // Using instance directly as it's not in the repository interface
+    return ShiftService.instance.openFiscalConnection(deviceId: deviceId);
   }
 
   /// Get automation settings controlled by backend.

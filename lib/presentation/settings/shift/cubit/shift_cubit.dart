@@ -15,6 +15,8 @@ class ShiftCubit extends Cubit<ShiftState> {
   Future<void> loadSettings() async {
     emit(ShiftLoading());
     try {
+      // Открываем фискальное соединение при входе на экран управления сменами
+      await _manageShiftUseCase.openFiscalConnection();
       emit(ShiftLoaded(await _loadShiftSettings()));
     } on FetchDataException catch (e) {
       emit(ShiftError('Ошибка сети: ${e.toString()}'));

@@ -111,8 +111,25 @@ class ShiftService {
         debugPrint(
             'ShiftService: Смена в нормальном состоянии: ${status.data!.shiftStateName}');
       }
+
+      // Открываем фискальное соединение при запуске
+      await openFiscalConnection();
     } catch (e) {
       debugPrint('ShiftService: Ошибка при проверке истекшей смены: $e');
+    }
+  }
+
+  /// Открытие фискального соединения
+  Future<void> openFiscalConnection({String deviceId = 'default'}) async {
+    try {
+      debugPrint('ShiftService: Открытие фискального соединения для устройства $deviceId');
+      await _apiClient.post(
+        '/fiscal/connection/open?device_id=$deviceId',
+        body: {},
+      );
+      debugPrint('ShiftService: Фискальное соединение успешно открыто');
+    } catch (e) {
+      debugPrint('ShiftService: Ошибка открытия фискального соединения: $e');
     }
   }
 
