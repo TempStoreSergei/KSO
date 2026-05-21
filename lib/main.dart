@@ -7,6 +7,8 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:motel/presentation/lock_screen/lock_screen.dart'; // Убедитесь, что путь верный
 import 'package:motel/core/api/api_client.dart';
 import 'package:motel/core/navigation/app_navigator.dart';
+import 'package:motel/core/di/service_locator.dart';
+import 'package:motel/core/services/shift_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +16,12 @@ Future<void> main() async {
   await ApiClient.instance.init();
   // Используем await, чтобы гарантировать завершение инициализации перед запуском
   await initializeDateFormatting('ru_RU', null);
+
+  // Инициализация сервиса смен
+  final shiftService = sl<ShiftService>();
+  await shiftService.checkAndCloseExpiredShiftOnStartup();
+  shiftService.startAutoCloseMonitoring();
+
   runApp(const MyApp());
 }
 

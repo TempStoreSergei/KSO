@@ -13,9 +13,18 @@ class ShiftStatus {
   });
 
   factory ShiftStatus.fromJson(Map<String, dynamic> json) {
+    // Поддержка ответов без обертки success/data
+    if (json.containsKey('shift_state')) {
+      return ShiftStatus(
+        success: true,
+        message: '',
+        data: ShiftData.fromJson(json),
+      );
+    }
+
     return ShiftStatus(
-      success: json['success'] ?? false,
-      message: json['message'] ?? '',
+      success: json['success'] ?? json['status'] ?? false,
+      message: json['message'] ?? json['detail'] ?? '',
       data: json['data'] != null ? ShiftData.fromJson(json['data']) : null,
     );
   }
@@ -31,7 +40,8 @@ class ShiftStatus {
 
 /// Данные смены
 class ShiftData {
-  final int shiftState; // 0 - закрыта, 1 - открыта, 2 - истекла (больше 24 часов)
+  final int
+      shiftState; // 0 - закрыта, 1 - открыта, 2 - истекла (больше 24 часов)
   final String shiftStateName;
   final int shiftNumber;
   final DateTime dateTime;
@@ -49,10 +59,12 @@ class ShiftData {
 
   factory ShiftData.fromJson(Map<String, dynamic> json) {
     return ShiftData(
-      shiftState: json['shift_state'] ?? 0,
-      shiftStateName: json['shift_state_name'] ?? '',
-      shiftNumber: json['shift_number'] ?? 0,
-      dateTime: DateTime.parse(json['date_time']),
+      shiftState: json['shift_state'] ?? json['shiftState'] ?? 0,
+      shiftStateName: json['shift_state_name'] ?? json['shiftStateName'] ?? '',
+      shiftNumber: json['shift_number'] ?? json['shiftNumber'] ?? 0,
+      dateTime: json['date_time'] != null 
+          ? DateTime.tryParse(json['date_time'].toString()) ?? DateTime.now()
+          : DateTime.now(),
     );
   }
 

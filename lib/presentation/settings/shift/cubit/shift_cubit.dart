@@ -1,38 +1,21 @@
 // lib/presentation/settings/shift/cubit/shift_cubit.dart
 
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:motel/core/api/api_client.dart';
 import 'package:motel/core/api/api_exceptions.dart';
-import 'package:motel/core/services/shift_service.dart';
+import 'package:motel/domain/models/shift_automation_settings.dart';
+import 'package:motel/domain/usecases/shift/manage_shift_usecase.dart';
 import 'package:motel/presentation/settings/shift/cubit/shift_state.dart';
 import 'package:motel/presentation/settings/shift/models/shift_settings.dart';
 
 class ShiftCubit extends Cubit<ShiftState> {
-  final ShiftService _shiftService = ShiftService.instance;
+  final ManageShiftUseCase _manageShiftUseCase;
 
-  ShiftCubit(ApiClient apiClient) : super(ShiftInitial());
+  ShiftCubit(this._manageShiftUseCase) : super(ShiftInitial());
 
   Future<void> loadSettings() async {
     emit(ShiftLoading());
     try {
-      // Используем новый ShiftService для получения статуса
-      final shiftStatus = await _shiftService.getShiftStatus();
-
-      if (!shiftStatus.success || shiftStatus.data == null) {
-        emit(ShiftError(shiftStatus.message));
-        return;
-      }
-
-      // Преобразуем в ShiftSettings с полными данными ShiftData
-      final settings = ShiftSettings(
-        autoShiftsIsEnable: false, // TODO: получать из настроек если нужно
-        autoShiftsTimeToOpen: '08:00',
-        autoShiftsTimeToClose: '23:55',
-        shiftIsOpened: shiftStatus.data!.isOpen,
-        shiftData: shiftStatus.data, // Передаем полные данные смены
-      );
-
-      emit(ShiftLoaded(settings));
+      emit(ShiftLoaded(await _loadShiftSettings()));
     } on FetchDataException catch (e) {
       emit(ShiftError('Ошибка сети: ${e.toString()}'));
     } on BadRequestException catch (e) {
@@ -44,68 +27,163 @@ class ShiftCubit extends Cubit<ShiftState> {
     }
   }
 
-  // Методы toggleAutoShifts и updateShiftTimes удалены, так как этих API нет
+  Future<ShiftSettings> _loadShiftSettings() async {
+    final automation = await _manageShiftUseCase.getAutomationSettings();
+    final shiftStatus = await _manageShiftUseCase.getStatus();
+
+    if (!shiftStatus.success || shiftStatus.data == null) {
+      throw Exception(shiftStatus.message);
+    }
+
+    return ShiftSettings.fromAutomation(
+      automation: automation,
+      shiftIsOpened: shiftStatus.data!.isOpen,
+      shiftData: shiftStatus.data,
+    );
+  }
+
+  ShiftSettings? _settingsFromState() {
+    final currentState = state;
+    if (currentState is ShiftLoaded) return currentState.settings;
+    if (currentState is ShiftUpdating) return currentState.settings;
+    if (currentState is ShiftValidationError) return currentState.settings;
+    return null;
+  }
+
+  Future<void> updateOpenMode(ShiftOpenMode mode) async {
+    final currentSettings = _settingsFromState();
+    if (currentSettings == null) return;
+
+    final nextMode =
+        mode == ShiftOpenMode.disabled ? ShiftOpenMode.firstReceipt : mode;
+    final nextSettings = currentSettings.copyWith(
+      openMode: nextMode,
+      autoShiftsTimeToOpen: nextMode == ShiftOpenMode.byTime
+          ? currentSettings.autoShiftsTimeToOpen ?? '08:00'
+          : null,
+      clearAutoShiftsTimeToOpen: nextMode != ShiftOpenMode.byTime,
+    );
+    await _saveAutomationSettings(nextSettings);
+  }
+
+  Future<void> updateOpenTime(String time) async {
+    final currentSettings = _settingsFromState();
+    if (currentSettings == null) return;
+
+    await _saveAutomationSettings(
+      currentSettings.copyWith(
+        openMode: ShiftOpenMode.byTime,
+        autoShiftsTimeToOpen: time,
+      ),
+    );
+  }
+
+  Future<void> updateCloseTime(String time) async {
+    final currentSettings = _settingsFromState();
+    if (currentSettings == null) return;
+
+    await _saveAutomationSettings(
+      currentSettings.copyWith(autoShiftsTimeToClose: time),
+    );
+  }
+
+  Future<void> disableAutoClose() async {
+    final currentSettings = _settingsFromState();
+    if (currentSettings == null) return;
+
+    await _saveAutomationSettings(
+      currentSettings.copyWith(clearAutoShiftsTimeToClose: true),
+    );
+  }
+
+  Future<void> toggleAcquiringReceiptReportOnClose(bool value) async {
+    final currentSettings = _settingsFromState();
+    if (currentSettings == null) return;
+
+    await _saveAutomationSettings(
+      currentSettings.copyWith(acquiringReceiptReportOnClose: value),
+    );
+  }
+
+  Future<void> _saveAutomationSettings(ShiftSettings settings) async {
+    emit(ShiftUpdating(settings));
+    try {
+      await _manageShiftUseCase.saveAutomationSettings(
+        settings.automationSettings,
+      );
+      emit(ShiftLoaded(await _loadShiftSettings()));
+    } catch (e) {
+      emit(
+        ShiftValidationError(
+          'Не удалось сохранить настройки смены на сервере: ${e.toString()}',
+          settings,
+        ),
+      );
+    }
+  }
 
   Future<void> openShift() async {
-    final currentState = state;
-    if (currentState is! ShiftLoaded) return;
+    final currentSettings = _settingsFromState();
+    if (currentSettings == null) return;
 
-    emit(ShiftUpdating(currentState.settings));
+    emit(ShiftUpdating(currentSettings));
     try {
-      // Используем ShiftService для открытия смены
-      final result = await _shiftService.openShift();
+      final result = await _manageShiftUseCase.openShift();
 
       if (!result.success) {
-        emit(ShiftError(result.message));
-        emit(ShiftLoaded(currentState.settings));
+        emit(ShiftValidationError(result.message, currentSettings));
         return;
       }
 
-      await loadSettings(); // Обновляем все данные
+      final updatedSettings = await _loadShiftSettings();
+      emit(ShiftLoaded(updatedSettings));
     } on FetchDataException catch (e) {
-      emit(ShiftError('Ошибка сети: ${e.toString()}'));
-      emit(ShiftLoaded(currentState.settings));
+      emit(ShiftValidationError(
+          'Ошибка сети: ${e.toString()}', currentSettings));
     } on BadRequestException catch (e) {
-      emit(ShiftError('Неверный запрос: ${e.toString()}'));
-      emit(ShiftLoaded(currentState.settings));
+      emit(ShiftValidationError(
+          'Неверный запрос: ${e.toString()}', currentSettings));
     } on UnauthorisedException catch (e) {
-      emit(ShiftError('Ошибка авторизации: ${e.toString()}'));
-      emit(ShiftLoaded(currentState.settings));
+      emit(ShiftValidationError(
+          'Ошибка авторизации: ${e.toString()}', currentSettings));
     } catch (e) {
-      emit(ShiftError('Ошибка открытия смены: ${e.toString()}'));
-      emit(ShiftLoaded(currentState.settings));
+      emit(ShiftValidationError(
+          'Ошибка открытия смены: ${e.toString()}', currentSettings));
     }
   }
 
   Future<void> closeShift() async {
-    final currentState = state;
-    if (currentState is! ShiftLoaded) return;
+    final currentSettings = _settingsFromState();
+    if (currentSettings == null) return;
 
-    emit(ShiftUpdating(currentState.settings));
+    emit(ShiftUpdating(currentSettings));
     try {
-      // Используем ShiftService для закрытия смены
-      final result = await _shiftService.closeShift();
+      final result = await _manageShiftUseCase.closeShift(
+        includeAcquiringReceiptReport:
+            currentSettings.acquiringReceiptReportOnClose,
+      );
 
       if (!result.success) {
-        emit(ShiftError(result.message));
-        emit(ShiftLoaded(currentState.settings));
+        emit(ShiftValidationError(result.message, currentSettings));
         return;
       }
 
-      await loadSettings(); // Обновляем все данные
+      final updatedSettings = await _loadShiftSettings();
+      emit(ShiftLoaded(updatedSettings));
     } on FetchDataException catch (e) {
-      emit(ShiftError('Ошибка сети: ${e.toString()}'));
-      emit(ShiftLoaded(currentState.settings));
+      emit(ShiftValidationError(
+          'Ошибка сети: ${e.toString()}', currentSettings));
     } on BadRequestException catch (e) {
-      emit(ShiftError('Неверный запрос: ${e.toString()}'));
-      emit(ShiftLoaded(currentState.settings));
+      emit(ShiftValidationError(
+          'Неверный запрос: ${e.toString()}', currentSettings));
     } on UnauthorisedException catch (e) {
-      emit(ShiftError('Ошибка авторизации: ${e.toString()}'));
-      emit(ShiftLoaded(currentState.settings));
+      emit(ShiftValidationError(
+          'Ошибка авторизации: ${e.toString()}', currentSettings));
     } catch (e) {
-      emit(ShiftError('Ошибка закрытия смены: ${e.toString()}'));
-      emit(ShiftLoaded(currentState.settings));
+      emit(ShiftValidationError(
+          'Ошибка закрытия смены: ${e.toString()}', currentSettings));
     }
   }
+
 
 }

@@ -1,142 +1,169 @@
 // lib/core/services/shift_service.dart
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:motel/core/api/api_client.dart';
+import 'package:motel/core/constants/api_endpoints.dart';
+import 'package:motel/domain/models/shift_automation_settings.dart';
 import 'package:motel/domain/models/shift_models.dart';
 
 /// Сервис для управления сменами на кассе
-/// Автоматически закрывает смену за 5 минут до конца дня (23:55)
 class ShiftService {
   ShiftService._privateConstructor();
   static final ShiftService instance = ShiftService._privateConstructor();
 
   final ApiClient _apiClient = ApiClient.instance;
-  Timer? _checkTimer;
   ShiftStatus? _lastShiftStatus;
+  Future<ShiftAutomationSettings> getAutomationSettings() async {
+    return refreshAutomationSettings();
+  }
+
+  Future<ShiftAutomationSettings> refreshAutomationSettings() async {
+    final response = await _apiClient.get(ApiEndpoints.getAutoCloseShift);
+    if (response is! Map) {
+      throw Exception('Некорректный ответ сервера');
+    }
+
+    final payload = _extractAutomationPayload(response);
+    final enabled = _asBool(payload['enabled']);
+    final openTime =
+        _normalizeTime(payload['open_time'] ?? payload['openTime']);
+    final closeTime =
+        _normalizeTime(payload['close_time'] ?? payload['closeTime']);
+    final acquiringResult = _asBool(
+      payload['acquiring_result'] ?? payload['acquiringResult'],
+      defaultValue: true,
+    );
+
+    final lastAttempt = payload['last_attempt_at'] ??
+        payload['lastAttemptAt'] ??
+        payload['last_automation_attempt_at'];
+
+    return ShiftAutomationSettings(
+      openMode: enabled && openTime != null
+          ? ShiftOpenMode.byTime
+          : ShiftOpenMode.firstReceipt,
+      autoOpenTime: openTime,
+      autoCloseTime: enabled ? closeTime : null,
+      acquiringReceiptReportOnClose: acquiringResult,
+      lastAutomationError: payload['last_error']?.toString() ??
+          payload['lastAutomationError']?.toString(),
+      lastAutomationAttemptAt: lastAttempt == null
+          ? null
+          : DateTime.tryParse(lastAttempt.toString()),
+    );
+  }
+
+  Map<String, dynamic> _extractAutomationPayload(Map response) {
+    final data = response['data'];
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+
+    return Map<String, dynamic>.from(response);
+  }
+
+  bool _asBool(dynamic value, {bool defaultValue = false}) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.toLowerCase();
+      if (normalized == 'true' || normalized == '1') return true;
+      if (normalized == 'false' || normalized == '0') return false;
+    }
+    return defaultValue;
+  }
+
+  String? _normalizeTime(dynamic value) {
+    final raw = value?.toString();
+    if (raw == null || raw.isEmpty) return null;
+    return raw.length >= 5 ? raw.substring(0, 5) : raw;
+  }
+
+  Future<void> saveAutomationSettings(ShiftAutomationSettings settings) async {
+    final shouldOpenByTime = settings.shouldOpenByTime;
+    final shouldCloseByTime = settings.shouldCloseByTime;
+    final body = <String, dynamic>{
+      'enabled': shouldOpenByTime || shouldCloseByTime,
+      'acquiringResult': settings.acquiringReceiptReportOnClose,
+    };
+
+    if (shouldOpenByTime) {
+      body['openTime'] = settings.autoOpenTime;
+    }
+
+    if (shouldCloseByTime) {
+      body['closeTime'] = settings.autoCloseTime;
+    }
+
+    await _apiClient.post(
+      ApiEndpoints.setAutoCloseShift,
+      body: body,
+    );
+  }
 
   /// Проверяет статус смены при запуске приложения
-  /// Если смена истекла (shift_state == 2), автоматически закрывает её
+  /// Расписание открытия/закрытия контролирует backend.
   Future<void> checkAndCloseExpiredShiftOnStartup() async {
     try {
-      debugPrint('ShiftService: Проверка истекшей смены при запуске');
+      debugPrint('ShiftService: Обновление статуса смены при запуске');
 
-      // Получаем статус смены
       final status = await getShiftStatus(silent: true);
-
-      if (status.success && status.data != null && status.data!.isExpired) {
-        debugPrint('ShiftService: Обнаружена истекшая смена №${status.data!.shiftNumber}, автоматически закрываем');
-
-        // Закрываем истекшую смену
-        final closeResult = await closeShift();
-
-        if (closeResult.success) {
-          debugPrint('ShiftService: Истекшая смена успешно закрыта при запуске');
-        } else {
-          debugPrint('ShiftService: Ошибка закрытия истекшей смены: ${closeResult.message}');
-        }
-      } else if (status.data != null) {
-        debugPrint('ShiftService: Смена в нормальном состоянии: ${status.data!.shiftStateName}');
+      if (status.data != null) {
+        debugPrint(
+            'ShiftService: Смена в нормальном состоянии: ${status.data!.shiftStateName}');
       }
     } catch (e) {
       debugPrint('ShiftService: Ошибка при проверке истекшей смены: $e');
     }
   }
 
-  /// Запускает умный таймер автоматического закрытия смены
-  /// Вычисляет время до 23:55 и создает один таймер на это время
+  /// Расписание выполняет backend, локальный таймер не используется.
   void startAutoCloseMonitoring() {
-    debugPrint('ShiftService: Запуск умного таймера автозакрытия смены');
-
-    // Останавливаем предыдущий таймер если он был
     stopAutoCloseMonitoring();
-
-    // Вычисляем время до автозакрытия
-    _scheduleNextAutoClose();
+    debugPrint(
+        'ShiftService: Локальный таймер смен отключен, работает backend');
   }
 
-  /// Останавливает мониторинг
+  /// Останавливает локальный мониторинг.
   void stopAutoCloseMonitoring() {
-    debugPrint('ShiftService: Остановка таймера автозакрытия смены');
-    _checkTimer?.cancel();
-    _checkTimer = null;
+    debugPrint('ShiftService: Локальный мониторинг смен не используется');
   }
 
-  /// Планирует следующее автоматическое закрытие смены
-  /// Берет время из date_time статуса смены и вычитает 5 минут
-  Future<void> _scheduleNextAutoClose() async {
-    try {
-      // Получаем статус смены
-      final status = await getShiftStatus(silent: true);
-
-      if (!status.success || status.data == null) {
-        debugPrint('ShiftService: Не удалось получить статус смены для планирования');
-        // Повторяем через час
-        _checkTimer = Timer(const Duration(hours: 1), () => _scheduleNextAutoClose());
-        return;
-      }
-
-      final now = DateTime.now();
-
-      // Берем время из date_time и вычитаем 5 минут
-      final shiftDateTime = status.data!.dateTime;
-      var closeTime = shiftDateTime.subtract(const Duration(minutes: 5));
-
-      // Если смена на сегодня, но время уже прошло, берем завтрашний день в то же время
-      if (closeTime.isBefore(now)) {
-        // Вычисляем время закрытия на завтра
-        closeTime = DateTime(
-          now.year,
-          now.month,
-          now.day + 1,
-          closeTime.hour,
-          closeTime.minute,
-        );
-      }
-
-      // Вычисляем длительность до закрытия
-      final duration = closeTime.difference(now);
-
-      debugPrint('ShiftService: Запланировано автозакрытие смены в $closeTime (через ${duration.inHours}ч ${duration.inMinutes % 60}м)');
-
-      // Создаем одноразовый таймер
-      _checkTimer = Timer(duration, () async {
-        await _performAutoClose();
-        // Планируем следующее закрытие
-        await _scheduleNextAutoClose();
-      });
-    } catch (e) {
-      debugPrint('ShiftService: Ошибка планирования автозакрытия: $e');
-      // Повторяем через час при ошибке
-      _checkTimer = Timer(const Duration(hours: 1), () => _scheduleNextAutoClose());
+  Future<ShiftActionResponse> _openShiftForAutomation() async {
+    final status = await getShiftStatus(silent: true);
+    if (!status.success || status.data == null) {
+      return ShiftActionResponse(
+        success: false,
+        message: status.message.isEmpty
+            ? 'Не удалось получить статус смены перед открытием'
+            : status.message,
+      );
     }
-  }
 
-  /// Выполняет автоматическое закрытие смены
-  Future<void> _performAutoClose() async {
-    try {
-      debugPrint('ShiftService: Выполнение автоматического закрытия смены');
-
-      // Получаем статус смены
-      final status = await getShiftStatus();
-
-      if (status.success && status.data != null && status.data!.isOpen) {
-        debugPrint('ShiftService: Смена №${status.data!.shiftNumber} открыта, закрываем автоматически');
-
-        // Закрываем смену
-        final closeResult = await closeShift();
-
-        if (closeResult.success) {
-          debugPrint('ShiftService: Смена успешно закрыта автоматически');
-        } else {
-          debugPrint('ShiftService: Ошибка автоматического закрытия смены: ${closeResult.message}');
-        }
-      } else if (status.data != null && status.data!.isClosed) {
-        debugPrint('ShiftService: Смена уже закрыта');
-      }
-    } catch (e) {
-      debugPrint('ShiftService: Ошибка при автоматическом закрытии смены: $e');
+    if (status.data!.isOpen) {
+      return ShiftActionResponse(success: true, message: 'Смена уже открыта');
     }
+
+    if (status.data!.isExpired) {
+      final closeResult = await closeShift();
+      if (!closeResult.success) return closeResult;
+    }
+
+    return openShift();
   }
+
+  Future<ShiftActionResponse> openShiftForFirstReceiptIfNeeded() async {
+    final settings = await getAutomationSettings();
+    if (!settings.shouldOpenOnFirstReceipt) {
+      return ShiftActionResponse(
+        success: true,
+        message: 'Автооткрытие не требуется',
+      );
+    }
+
+    return _openShiftForAutomation();
+  }
+
+
 
   /// Получает текущий статус смены
   Future<ShiftStatus> getShiftStatus({
@@ -145,38 +172,21 @@ class ShiftService {
   }) async {
     try {
       if (!silent) {
-        debugPrint('ShiftService: Получение статуса смены для устройства $deviceId');
+        debugPrint(
+            'ShiftService: Получение статуса смены для устройства $deviceId');
       }
 
-      var response = await _apiClient.get(
-        '/fiscal/shift/status',
+      final response = await _apiClient.get(
+        ApiEndpoints.shiftStatus,
         params: {'device_id': deviceId},
       );
-
-      // Проверяем на ошибку соединения
-      if (response['success'] == false &&
-          response['message'] != null &&
-          response['message'].toString().contains('Соединение не установлено')) {
-        debugPrint('ShiftService: Обнаружена ошибка соединения. Попытка переподключения...');
-        
-        final connectionResult = await _establishConnection(deviceId);
-        if (connectionResult) {
-          debugPrint('ShiftService: Подключение восстановлено. Повторный запрос статуса...');
-          // Повторный запрос
-          response = await _apiClient.get(
-            '/fiscal/shift/status',
-            params: {'device_id': deviceId},
-          );
-        } else {
-          debugPrint('ShiftService: Не удалось восстановить подключение.');
-        }
-      }
 
       final status = ShiftStatus.fromJson(response);
       _lastShiftStatus = status;
 
       if (!silent && status.data != null) {
-        debugPrint('ShiftService: Статус смены - ${status.data!.shiftStateName}, номер: ${status.data!.shiftNumber}');
+        debugPrint(
+            'ShiftService: Статус смены - ${status.data!.shiftStateName}, номер: ${status.data!.shiftNumber}');
       }
 
       return status;
@@ -189,24 +199,6 @@ class ShiftService {
     }
   }
 
-  /// Попытка установить соединение с фискальным регистратором
-  Future<bool> _establishConnection(String deviceId) async {
-    try {
-      await _apiClient.post(
-        '/fiscal/connection/open?device_id=$deviceId',
-        body: {
-          "settings": {
-            "additionalProp1": {}
-          }
-        },
-      );
-      return true;
-    } catch (e) {
-      debugPrint('ShiftService: Ошибка установки соединения: $e');
-      return false;
-    }
-  }
-
   /// Открывает новую смену
   Future<ShiftActionResponse> openShift({
     String deviceId = 'default',
@@ -215,7 +207,7 @@ class ShiftService {
       debugPrint('ShiftService: Открытие смены для устройства $deviceId');
 
       final response = await _apiClient.post(
-        '/fiscal/shift/open',
+        ApiEndpoints.openShift,
         body: {'device_id': deviceId},
       );
 
@@ -223,8 +215,6 @@ class ShiftService {
 
       if (result.success) {
         debugPrint('ShiftService: Смена успешно открыта');
-        // Обновляем кеш статуса
-        await getShiftStatus(deviceId: deviceId, silent: true);
       } else {
         debugPrint('ShiftService: Ошибка открытия смены: ${result.message}');
       }
@@ -242,12 +232,21 @@ class ShiftService {
   /// Закрывает текущую смену
   Future<ShiftActionResponse> closeShift({
     String deviceId = 'default',
+    bool? includeAcquiringReceiptReport,
   }) async {
     try {
       debugPrint('ShiftService: Закрытие смены для устройства $deviceId');
 
+      final shouldMakeAcquiringReport = includeAcquiringReceiptReport ??
+          (await getAutomationSettings()).acquiringReceiptReportOnClose;
+
+      if (shouldMakeAcquiringReport) {
+        final reportResult = await _makeAcquiringReceiptReport();
+        if (!reportResult.success) return reportResult;
+      }
+
       final response = await _apiClient.post(
-        '/fiscal/shift/close',
+        ApiEndpoints.closeShift,
         body: {'device_id': deviceId},
       );
 
@@ -255,8 +254,6 @@ class ShiftService {
 
       if (result.success) {
         debugPrint('ShiftService: Смена успешно закрыта');
-        // Обновляем кеш статуса
-        await getShiftStatus(deviceId: deviceId, silent: true);
       } else {
         debugPrint('ShiftService: Ошибка закрытия смены: ${result.message}');
       }
@@ -267,6 +264,48 @@ class ShiftService {
       return ShiftActionResponse(
         success: false,
         message: 'Ошибка закрытия смены: $e',
+      );
+    }
+  }
+
+  Future<ShiftActionResponse> _makeAcquiringReceiptReport() async {
+    try {
+      debugPrint('ShiftService: Выполнение итога по чекам эквайринга');
+
+      final response = await _apiClient.get(ApiEndpoints.receiptReport);
+      if (response is Map<String, dynamic>) {
+        final status = response['status'];
+        if (status == false) {
+          return ShiftActionResponse(
+            success: false,
+            message: response['detail']?.toString() ??
+                'Итог по чекам эквайринга не выполнен',
+            data: response['data'],
+          );
+        }
+
+        final data = response['data'];
+        final receiptLines =
+            data is Map<String, dynamic> ? data['receipt_lst_str'] : null;
+        if (receiptLines is List && receiptLines.isNotEmpty) {
+          final receiptText = receiptLines
+              .map((line) => line.toString().trimRight())
+              .join('\n');
+          await _apiClient.post(
+            '/system/print_via_atol_kkt',
+            body: {'text': receiptText},
+          );
+        }
+      }
+
+      return ShiftActionResponse(
+        success: true,
+        message: 'Итог по чекам эквайринга выполнен',
+      );
+    } catch (e) {
+      return ShiftActionResponse(
+        success: false,
+        message: 'Ошибка итога по чекам эквайринга: $e',
       );
     }
   }
