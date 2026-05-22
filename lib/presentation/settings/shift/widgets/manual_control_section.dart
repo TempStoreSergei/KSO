@@ -78,7 +78,7 @@ class ManualControlSection extends StatelessWidget {
         _buildInfoFooter(
           context,
           isShiftOpen
-              ? 'Смена будет автоматически закрыта за 5 минут до конца рабочего дня.'
+              ? 'Закрытие смены выполняется по выбранному режиму.'
               : 'Смена откроется автоматически при печати первого чека.',
           isShiftOpen
               ? CupertinoColors.systemRed

@@ -63,29 +63,6 @@ class ShiftStatusSection extends StatelessWidget {
               ),
             if ((settings.shiftIsOpened || shiftData?.isExpired == true) &&
                 shiftData != null) ...[
-              CupertinoListTile(
-                title: const Text('Открыта'),
-                trailing: Text(
-                  '${DateFormat('HH:mm').format(shiftData.dateTime)} '
-                  '${_getDayLabel(shiftData.dateTime)}',
-                  style: const TextStyle(
-                    color: CupertinoColors.systemGrey,
-                    fontSize: 17,
-                  ),
-                ),
-              ),
-              if (closeTime != null)
-                CupertinoListTile(
-                  title: const Text('Автоматическое закрытие'),
-                  trailing: Text(
-                    '${DateFormat('HH:mm').format(closeTime)} '
-                    '${_getDayLabel(closeTime)}',
-                    style: const TextStyle(
-                      color: CupertinoColors.systemGrey,
-                      fontSize: 17,
-                    ),
-                  ),
-                ),
               if (timeRemaining != null)
                 CupertinoListTile(
                   title: const Text('До закрытия'),
@@ -175,20 +152,6 @@ class ShiftStatusSection extends StatelessWidget {
     return closeTime.difference(DateTime.now()).inMinutes < 30;
   }
 
-  /// Возвращает подпись дня (сегодня/завтра).
-  String _getDayLabel(DateTime dateTime) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final targetDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
-
-    if (targetDate == today) {
-      return '(сегодня)';
-    } else if (targetDate == today.add(const Duration(days: 1))) {
-      return '(завтра)';
-    } else {
-      return '(${DateFormat('dd.MM').format(dateTime)})';
-    }
-  }
 }
 
 class _ShiftStatusViewModel {
