@@ -26,11 +26,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Вычисляем общую сумму
-    final roomTotalPrice = widget.transaction.room.totalPrice ?? 0;
-    final servicesTotalPrice = widget.transaction.services.fold<int>(0, (sum, service) => sum + service.totalPrice);
-    final finesTotalPrice = widget.transaction.fines.fold<int>(0, (sum, fine) => sum + fine.totalPrice);
-    final totalPrice = roomTotalPrice + servicesTotalPrice + finesTotalPrice;
+    // Используем нормализованный итог: для проживания парсер берёт
+    // room.totalPrice, а room.price оставляет ценой за одни сутки.
+    final totalPrice = widget.transaction.totalPrice;
 
     final roomTypeMap = {
       'fourBed': '4 места',
@@ -107,8 +105,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     _buildDetailRow('Корпус', widget.transaction.room.building.toString()),
                     if (widget.transaction.room.countDays != null && widget.transaction.room.countDays! > 0)
                       _buildDetailRow('Кол-во дней', widget.transaction.room.countDays.toString()),
-                    if (widget.transaction.room.totalPrice != null)
-                      _buildDetailRow('Стоимость проживания', '${widget.transaction.room.totalPrice! ~/ 100} ₽'),
+                    if (widget.transaction.roomTotalPrice > 0)
+                      _buildDetailRow(
+                        'Стоимость проживания',
+                        '${widget.transaction.roomTotalPrice ~/ 100} ₽',
+                      ),
                   ],
                 ),
 
@@ -116,32 +117,62 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 if (widget.transaction.services.isNotEmpty)
                   CupertinoListSection.insetGrouped(
                     header: const Text('УСЛУГИ'),
-                    children: widget.transaction.services.map((service) {
-                      return CupertinoListTile(
-                        title: Text(service.name),
-                        subtitle: Text('Код: ${service.serviceCode} | ${service.price ~/ 100} ₽ × ${service.count}'),
-                        additionalInfo: Text(
-                          '${service.totalPrice ~/ 100} ₽',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                    children: [
+                      SizedBox(
+                        height: _detailItemsHeight(widget.transaction.services.length),
+                        child: ListView.builder(
+                          primary: false,
+                          itemCount: widget.transaction.services.length,
+                          itemBuilder: (context, index) {
+                            final service = widget.transaction.services[index];
+                            return CupertinoListTile(
+                              title: Text(service.name),
+                              subtitle: Text(
+                                'Код: ${service.serviceCode} | '
+                                '${service.price ~/ 100} ₽ × ${service.count}',
+                              ),
+                              additionalInfo: Text(
+                                '${service.totalPrice ~/ 100} ₽',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ],
                   ),
 
                 // Штрафы
                 if (widget.transaction.fines.isNotEmpty)
                   CupertinoListSection.insetGrouped(
                     header: const Text('ШТРАФЫ'),
-                    children: widget.transaction.fines.map((fine) {
-                      return CupertinoListTile(
-                        title: Text((fine.name).trim().isEmpty ? 'Штраф #${fine.id}' : fine.name),
-                        subtitle: Text('Код: ${fine.fineCode} | ${fine.price ~/ 100} ₽ × ${fine.count}'),
-                        additionalInfo: Text(
-                          '${fine.totalPrice ~/ 100} ₽',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                    children: [
+                      SizedBox(
+                        height: _detailItemsHeight(widget.transaction.fines.length),
+                        child: ListView.builder(
+                          primary: false,
+                          itemCount: widget.transaction.fines.length,
+                          itemBuilder: (context, index) {
+                            final fine = widget.transaction.fines[index];
+                            return CupertinoListTile(
+                              title: Text(
+                                fine.name.trim().isEmpty
+                                    ? 'Штраф #${fine.id}'
+                                    : fine.name,
+                              ),
+                              subtitle: Text(
+                                'Код: ${fine.fineCode} | '
+                                '${fine.price ~/ 100} ₽ × ${fine.count}',
+                              ),
+                              additionalInfo: Text(
+                                '${fine.totalPrice ~/ 100} ₽',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ],
                   ),
 
                 // Итого
@@ -220,6 +251,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
     );
+  }
+
+  double _detailItemsHeight(int itemCount) {
+    return (itemCount * 72.0).clamp(72.0, 360.0).toDouble();
   }
 
   Color _getStatusColor() {
@@ -317,7 +352,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 child: const Text('OK'),
                 onPressed: () {
                   Navigator.of(ctx).pop();
-                  Navigator.of(context).pop(); // Возвращаемся к списку транзакций
+                  Navigator.of(context).pop(true); // Данные транзакции изменились
                 },
               ),
             ],

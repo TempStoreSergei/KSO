@@ -12,6 +12,7 @@ class BookingCubit extends Cubit<BookingState> {
   final GetRooms _getRooms;
   final MetricsService _metricsService;
   final ApiClient _apiClient = ApiClient.instance; // Получаем инстанс ApiClient
+  int _roomPriceRequestVersion = 0;
 
   BookingCubit(this._getRooms, this._metricsService) : super(BookingState());
 
@@ -36,14 +37,24 @@ class BookingCubit extends Cubit<BookingState> {
   }
 
   void setRoomType(RoomType roomType) {
+    _roomPriceRequestVersion++;
     emit(state.copyWith(
-      bookingData: state.bookingData.copyWith(selectedRoomType: roomType, forceNullRoom: true),
+      bookingData: state.bookingData.copyWith(
+        selectedRoomType: roomType,
+        forceNullRoom: true,
+        calculatedRoomPrice: null,
+      ),
     ));
   }
 
   Future<void> setRoom(Room? room) async {
+    final requestVersion = ++_roomPriceRequestVersion;
     emit(state.copyWith(
-      bookingData: state.bookingData.copyWith(selectedRoom: room),
+      bookingData: state.bookingData.copyWith(
+        selectedRoom: room,
+        forceNullRoom: room == null,
+        calculatedRoomPrice: null,
+      ),
     ));
     if (room != null) {
       _metricsService.recordRoomSelection('${room.roomNumber}-${room.bedNumber}');
@@ -58,8 +69,10 @@ class BookingCubit extends Cubit<BookingState> {
             roomBuilding: int.tryParse(room.buildingId) ?? 0,
             countDays: nights,
           );
+          if (requestVersion != _roomPriceRequestVersion) return;
           setCalculatedRoomPrice(price);
         } catch (e) {
+          if (requestVersion != _roomPriceRequestVersion) return;
           DiagnosticLogger.info('booking', 'room_price_calculation_failed', data: {'error': e.toString()});
           setCalculatedRoomPrice(null);
         }
@@ -79,19 +92,25 @@ class BookingCubit extends Cubit<BookingState> {
   }
 
   void setCategory(BookingCategory category) {
+    _roomPriceRequestVersion++;
     emit(state.copyWith(
       bookingData: state.bookingData.copyWith(
         selectedCategory: category,
         selectedItems: [],
+        checkInDate: null,
+        checkOutDate: null,
+        calculatedRoomPrice: null,
       ),
     ));
   }
 
   Future<void> setDates(DateTime? checkIn, DateTime? checkOut) async {
+    final requestVersion = ++_roomPriceRequestVersion;
     // Сначала обновляем состояние с новыми датами
     final tempState = state.bookingData.copyWith(
       checkInDate: checkIn,
       checkOutDate: checkOut,
+      calculatedRoomPrice: null,
     );
     emit(state.copyWith(bookingData: tempState));
 
@@ -107,9 +126,11 @@ class BookingCubit extends Cubit<BookingState> {
           roomBuilding: int.tryParse(room.buildingId) ?? 0,
           countDays: nights,
         );
+        if (requestVersion != _roomPriceRequestVersion) return;
         // Обновляем состояние с рассчитанной ценой
         setCalculatedRoomPrice(price);
       } catch (e) {
+        if (requestVersion != _roomPriceRequestVersion) return;
         DiagnosticLogger.info('booking', 'room_price_calculation_failed', data: {'error': e.toString()});
         // Можно обработать ошибку, например, сбросить цену
         setCalculatedRoomPrice(null);
@@ -206,9 +227,7 @@ class BookingCubit extends Cubit<BookingState> {
       case BookingStep.categorySelection:
         return data.selectedCategory != BookingCategory.unknown;
       case BookingStep.period:
-
-
-        return data.checkInDate != null && data.checkOutDate != null;
+        return data.hasValidStayPeriod;
       case BookingStep.itemSelection:
         if (data.selectedCategory == BookingCategory.accommodation) {
           return true;

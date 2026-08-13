@@ -5,6 +5,8 @@
 import 'package:motel/domain/models/booking_models.dart';
 import 'package:motel/data/models/room_model.dart';
 
+const Object _notProvided = Object();
+
 enum BookingStatus { initial, loading, success, failure, paymentError }
 
 class BookingState {
@@ -91,6 +93,7 @@ class BookingDataState {
 
   int get totalNights => _data.totalNights;
   int get totalPrice => _data.totalPrice;
+  bool get hasValidStayPeriod => _data.hasValidStayPeriod;
 
   BookingData get data => _data;
 
@@ -100,14 +103,14 @@ class BookingDataState {
     Room? selectedRoom,
     BookingCategory? selectedCategory,
     List<BookingItem>? selectedItems,
-    DateTime? checkInDate,
-    DateTime? checkOutDate,
+    Object? checkInDate = _notProvided,
+    Object? checkOutDate = _notProvided,
     String? lastName,
     String? firstName,
     String? middleName,
     String? phoneNumber,
     String? paymentMethod,
-    int? calculatedRoomPrice,
+    Object? calculatedRoomPrice = _notProvided,
     bool forceNullRoom = false,
   }) {
     final newData = BookingData()
@@ -116,14 +119,16 @@ class BookingDataState {
       ..selectedRoom = forceNullRoom ? null : selectedRoom ?? _data.selectedRoom
       ..selectedCategory = selectedCategory ?? _data.selectedCategory
       ..selectedItems = selectedItems ?? List.from(_data.selectedItems)
-      ..checkInDate = checkInDate ?? _data.checkInDate
-      ..checkOutDate = checkOutDate ?? _data.checkOutDate
+      ..checkInDate = identical(checkInDate, _notProvided) ? _data.checkInDate : checkInDate as DateTime?
+      ..checkOutDate = identical(checkOutDate, _notProvided) ? _data.checkOutDate : checkOutDate as DateTime?
       ..lastName = lastName ?? _data.lastName
       ..firstName = firstName ?? _data.firstName
       ..middleName = middleName ?? _data.middleName
       ..phoneNumber = phoneNumber ?? _data.phoneNumber
       ..paymentMethod = paymentMethod ?? _data.paymentMethod
-      ..calculatedRoomPrice = calculatedRoomPrice ?? _data.calculatedRoomPrice;
+      ..calculatedRoomPrice = identical(calculatedRoomPrice, _notProvided)
+          ? _data.calculatedRoomPrice
+          : calculatedRoomPrice as int?;
 
     return BookingDataState(newData);
   }

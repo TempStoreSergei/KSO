@@ -123,63 +123,64 @@ class _TransactionsPanelState extends State<TransactionsPanel> {
                 else
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 300),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: _transactions!.map((transaction) {
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2C2C2E),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      '#${transaction.id}',
-                                      style: const TextStyle(
-                                        color: CupertinoColors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Комната ${transaction.room.number}',
-                                      style: const TextStyle(
-                                        color: CupertinoColors.activeBlue,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '${transaction.guest.lastName} ${transaction.guest.firstName}',
-                                  style: const TextStyle(
-                                    color: CupertinoColors.systemGrey,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                if (transaction.room.countDays != null && transaction.room.countDays! > 0) ...[
-                                  const SizedBox(height: 4),
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: _transactions!.length,
+                      itemBuilder: (context, index) {
+                        final transaction = _transactions![index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2C2C2E),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
                                   Text(
-                                    'Дней: ${transaction.room.countDays}',
+                                    '#${transaction.id}',
                                     style: const TextStyle(
-                                      color: CupertinoColors.systemGrey,
-                                      fontSize: 11,
+                                      color: CupertinoColors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Комната ${transaction.room.number}',
+                                    style: const TextStyle(
+                                      color: CupertinoColors.activeBlue,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${transaction.guest.lastName} ${transaction.guest.firstName}',
+                                style: const TextStyle(
+                                  color: CupertinoColors.systemGrey,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              if (transaction.room.countDays != null && transaction.room.countDays! > 0) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Дней: ${transaction.room.countDays}',
+                                  style: const TextStyle(
+                                    color: CupertinoColors.systemGrey,
+                                    fontSize: 11,
+                                  ),
+                                ),
                               ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
         ],

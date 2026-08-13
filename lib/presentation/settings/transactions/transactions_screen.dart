@@ -13,6 +13,7 @@ import 'package:motel/presentation/settings/transactions/models/send_mode.dart';
 import 'package:motel/presentation/settings/transactions/widgets/transaction_tile.dart';
 import 'package:motel/presentation/settings/transactions/widgets/transactions_header_panel.dart';
 import 'package:motel/presentation/settings/transactions/widgets/transactions_selection_panel.dart';
+import 'package:motel/presentation/widgets/sliver_cupertino_list_section.dart';
 enum PaymentFilter {
   all('Все'),
   cash('Наличные'),
@@ -594,6 +595,50 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
+  Widget _buildTransactionTile(Transaction transaction) {
+    return TransactionTile(
+      transaction: transaction,
+      selectionMode: _selectionMode,
+      isSelected: _selectedTransactionIds.contains(transaction.id),
+      isValidated: _isValidated(transaction.id),
+      validationError: _validationErrors[transaction.id],
+      isProcessing: _processingIds.contains(transaction.id),
+      accentColor: _accentColor,
+      onSelect: () {
+        setState(() {
+          if (_selectedTransactionIds.contains(transaction.id)) {
+            _selectedTransactionIds.remove(transaction.id);
+          } else {
+            _selectedTransactionIds.add(transaction.id);
+          }
+        });
+      },
+      onSelectBlocked: () => _showError(transaction.sentSuccessfully
+          ? 'Транзакция уже отправлена в 1С'
+          : 'Сначала подтвердите номер телефона для этой транзакции'),
+      onDelete: () => _deleteTransaction(transaction),
+      onEdit: () async {
+        if (_processingIds.contains(transaction.id)) return;
+        final result = await Navigator.of(context).push(
+          CupertinoPageRoute(
+            builder: (_) => TransactionEditScreen(transaction: transaction),
+          ),
+        );
+        if (result == true) _loadTransactions();
+      },
+      onSend: () => _sendTo1C(transaction),
+      onInfo: () async {
+        if (_processingIds.contains(transaction.id)) return;
+        final result = await Navigator.of(context).push<bool>(
+          CupertinoPageRoute(
+            builder: (_) => TransactionDetailScreen(transaction: transaction),
+          ),
+        );
+        if (result == true) _loadTransactions();
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredTransactions = _filteredTransactions;
@@ -755,58 +800,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 ),
 
               if (_transactions != null && filteredTransactions.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: CupertinoListSection.insetGrouped(
-                    header: const Text('СПИСОК ТРАНЗАКЦИЙ'),
-                    children: filteredTransactions
-                        .map(
-                          (t) =>
-                          TransactionTile(
-                            transaction: t,
-                            selectionMode: _selectionMode,
-                            isSelected: _selectedTransactionIds.contains(t.id),
-                            isValidated: _isValidated(t.id),
-                            validationError: _validationErrors[t.id],
-                            isProcessing: _processingIds.contains(t.id),
-                            accentColor: _accentColor,
-                            onSelect: () {
-                              setState(() {
-                                if (_selectedTransactionIds.contains(t.id)) {
-                                  _selectedTransactionIds.remove(t.id);
-                                } else {
-                                  _selectedTransactionIds.add(t.id);
-                                }
-                              });
-                            },
-                            onSelectBlocked: () => _showError(t.sentSuccessfully
-                                ? 'Транзакция уже отправлена в 1С'
-                                : 'Сначала подтвердите номер телефона для этой транзакции'),
-                            onDelete: () => _deleteTransaction(t),
-                            onEdit: () async {
-                              if (_processingIds.contains(t.id)) return;
-                              final result = await Navigator.of(context).push(
-                                CupertinoPageRoute(
-                                  builder: (_) =>
-                                      TransactionEditScreen(transaction: t),
-                                ),
-                              );
-                              if (result == true) _loadTransactions();
-                            },
-                            onSend: () => _sendTo1C(t),
-                            onInfo: () async {
-                              if (_processingIds.contains(t.id)) return;
-                              await Navigator.of(context).push(
-                                CupertinoPageRoute(
-                                  builder: (_) =>
-                                      TransactionDetailScreen(transaction: t),
-                                ),
-                              );
-                              _loadTransactions();
-                            },
-                          ),
-                    )
-                        .toList(),
-                  ),
+                SliverCupertinoListSection(
+                  header: const Text('СПИСОК ТРАНЗАКЦИЙ'),
+                  itemCount: filteredTransactions.length,
+                  itemBuilder: (context, index) =>
+                      _buildTransactionTile(filteredTransactions[index]),
                 ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 30)),

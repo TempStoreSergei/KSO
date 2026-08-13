@@ -11,6 +11,7 @@ import 'package:motel/domain/models/fine_models.dart';
 import 'package:motel/domain/usecases/get_fines.dart';
 import 'package:motel/domain/usecases/delete_fine.dart';
 import 'package:motel/presentation/settings/fines/fine_edit_screen.dart';
+import 'package:motel/presentation/widgets/sliver_cupertino_list_section.dart';
 
 class FinesSettingsScreen extends StatefulWidget {
   const FinesSettingsScreen({super.key});
@@ -160,19 +161,21 @@ class _FinesSettingsScreenState extends State<FinesSettingsScreen> {
     final violationFines = _fines!.where((f) => f.type == FineType.violationRules).toList();
     final damageFines = _fines!.where((f) => f.type == FineType.damageToProperty).toList();
 
-    return SliverList(
-      delegate: SliverChildListDelegate([
+    return SliverMainAxisGroup(
+      slivers: [
         if (violationFines.isNotEmpty)
-          CupertinoListSection.insetGrouped(
+          SliverCupertinoListSection(
             header: const Text('НАРУШЕНИЕ ПРАВИЛ'),
-            children: violationFines.map((fine) => _buildFineItem(fine)).toList(),
+            itemCount: violationFines.length,
+            itemBuilder: (context, index) => _buildFineItem(violationFines[index]),
           ),
         if (damageFines.isNotEmpty)
-          CupertinoListSection.insetGrouped(
+          SliverCupertinoListSection(
             header: const Text('ПОРЧА ИМУЩЕСТВА'),
-            children: damageFines.map((fine) => _buildFineItem(fine)).toList(),
+            itemCount: damageFines.length,
+            itemBuilder: (context, index) => _buildFineItem(damageFines[index]),
           ),
-      ]),
+      ],
     );
   }
 

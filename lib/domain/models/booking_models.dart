@@ -113,6 +113,8 @@ class BookingData {
     return nights > 0 ? nights : 1;
   }
 
+  bool get hasValidStayPeriod => totalNights > 0 && calculatedRoomPrice != null;
+
   int get totalPrice {
     if (selectedCategory == BookingCategory.accommodation && selectedRoom != null) {
       // Используем ТОЛЬКО рассчитанную цену с сервера

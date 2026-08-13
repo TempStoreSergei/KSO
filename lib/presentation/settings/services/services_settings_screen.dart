@@ -12,6 +12,7 @@ import 'package:motel/data/repositories/service_repository_impl.dart';
 import 'package:motel/domain/entities/service_entity.dart';
 import 'package:motel/domain/repositories/service_repository.dart';
 import 'package:motel/presentation/settings/services/service_edit_screen.dart';
+import 'package:motel/presentation/widgets/sliver_cupertino_list_section.dart';
 
 class ServicesSettingsScreen extends StatefulWidget {
   const ServicesSettingsScreen({super.key});
@@ -131,21 +132,23 @@ class _ServicesSettingsScreenState extends State<ServicesSettingsScreen> {
       );
     }
 
-    return SliverToBoxAdapter(
-      child: CupertinoListSection.insetGrouped(
-        header: const Text('СУЩЕСТВУЮЩИЕ УСЛУГИ'),
-        children: _services!.map((service) {
-          return CupertinoListTile(
-            title: Text(service.name),
-            subtitle: Text(
-              '${service.price ~/ 100} ₽ | Налог: ${service.tax}%',
-              style: const TextStyle(color: CupertinoColors.systemGrey),
-            ),
-            trailing: _canUpdateService ? const CupertinoListTileChevron() : null,
-            onTap: _canUpdateService ? () => _navigateAndReload(ServiceEditScreen(service: service)) : null,
-          );
-        }).toList(),
-      ),
+    return SliverCupertinoListSection(
+      header: const Text('СУЩЕСТВУЮЩИЕ УСЛУГИ'),
+      itemCount: _services!.length,
+      itemBuilder: (context, index) {
+        final service = _services![index];
+        return CupertinoListTile(
+          title: Text(service.name),
+          subtitle: Text(
+            '${service.price ~/ 100} ₽ | Налог: ${service.tax}%',
+            style: const TextStyle(color: CupertinoColors.systemGrey),
+          ),
+          trailing: _canUpdateService ? const CupertinoListTileChevron() : null,
+          onTap: _canUpdateService
+              ? () => _navigateAndReload(ServiceEditScreen(service: service))
+              : null,
+        );
+      },
     );
   }
 }

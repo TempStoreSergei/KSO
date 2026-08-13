@@ -4,6 +4,7 @@
 
 import 'package:flutter/cupertino.dart';
 import 'package:motel/presentation/settings/bill_acceptor/models/bill_acceptor_models.dart';
+import 'package:motel/presentation/widgets/sliver_cupertino_list_section.dart';
 
 /// Экран журнала операций теста купюроприемника
 class TestEventsScreen extends StatelessWidget {
@@ -21,10 +22,11 @@ class TestEventsScreen extends StatelessWidget {
             largeTitle: Text('Журнал операций'),
             previousPageTitle: 'Назад',
           ),
-          SliverToBoxAdapter(
-            child: CupertinoListSection.insetGrouped(
-              header: const Text('ВСЕ СОБЫТИЯ'),
-              children: events.map((event) {
+          SliverCupertinoListSection(
+            header: const Text('ВСЕ СОБЫТИЯ'),
+            itemCount: events.length,
+            itemBuilder: (context, index) {
+              final event = events[index];
                 IconData? icon;
                 Color? iconColor;
 
@@ -71,8 +73,7 @@ class TestEventsScreen extends StatelessWidget {
                     ),
                   ),
                 );
-              }).toList(),
-            ),
+            },
           ),
         ],
       ),

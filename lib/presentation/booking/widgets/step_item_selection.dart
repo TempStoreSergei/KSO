@@ -265,48 +265,51 @@ class _StepItemSelectionState extends State<StepItemSelection> {
       );
     }
 
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        CupertinoListSection.insetGrouped(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          backgroundColor: const Color(0xFF000000),
-          children: items.map((item) {
-            final isSelected = _isSelected(item);
-            final selectedItem = widget.selectedItems.firstWhere(
-              (i) => i.id == item.id,
-              orElse: () => item,
-            );
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: items.length,
+      separatorBuilder: (context, index) => Container(
+        height: 0.5,
+        color: const Color(0xFF2C2C2E),
+      ),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final isSelected = _isSelected(item);
+        final selectedItem = widget.selectedItems.firstWhere(
+          (i) => i.id == item.id,
+          orElse: () => item,
+        );
 
-            return CupertinoListTile(
-              title: Text(
-                  item.name,
-                  style: const TextStyle(
-                    color: CupertinoColors.white,
-                    fontSize: 16,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              subtitle: _buildSubtitle(item, selectedItem),
-              leading: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _getItemIconColor(item),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  _getItemIcon(item),
-                  color: CupertinoColors.white,
-                  size: 20,
-                ),
+        return Container(
+          color: const Color(0xFF000000),
+          child: CupertinoListTile(
+            title: Text(
+              item.name,
+              style: const TextStyle(
+                color: CupertinoColors.white,
+                fontSize: 16,
               ),
-              trailing: _buildTrailing(item, selectedItem, isSelected),
-              onTap: () => _toggleItem(item),
-            );
-          }).toList(),
-        ),
-      ],
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: _buildSubtitle(item, selectedItem),
+            leading: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: _getItemIconColor(item),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                _getItemIcon(item),
+                color: CupertinoColors.white,
+                size: 20,
+              ),
+            ),
+            trailing: _buildTrailing(item, selectedItem, isSelected),
+            onTap: () => _toggleItem(item),
+          ),
+        );
+      },
     );
   }
 

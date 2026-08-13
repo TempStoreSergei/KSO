@@ -46,7 +46,7 @@ class TransactionTile extends StatelessWidget {
     final hasServices = transaction.services.isNotEmpty;
     final hasFines = transaction.fines.isNotEmpty;
     final hasRoomCharge = (!hasServices && !hasFines) || ((transaction.room.totalPrice ?? 0) > 0);
-    final roomSum = hasRoomCharge ? (transaction.room.totalPrice ?? transaction.room.price) : 0;
+    final roomSum = hasRoomCharge ? transaction.roomTotalPrice : 0;
     final itemsPreview = _itemsPreview(transaction);
     final status = _statusInfo(transaction);
     final canSelect = isValidated && !transaction.sentSuccessfully;
@@ -224,13 +224,7 @@ class TransactionTile extends StatelessWidget {
   }
 
   int _calculateDisplayPrice(Transaction transaction) {
-    if (transaction.services.isNotEmpty) {
-      return transaction.services.fold<int>(0, (sum, service) => sum + service.totalPrice);
-    }
-    if (transaction.fines.isNotEmpty) {
-      return transaction.fines.fold<int>(0, (sum, fine) => sum + fine.totalPrice);
-    }
-    return transaction.room.totalPrice ?? transaction.room.price;
+    return transaction.totalPrice;
   }
 
   String? _formatPaymentDateTime(DateTime? value) {

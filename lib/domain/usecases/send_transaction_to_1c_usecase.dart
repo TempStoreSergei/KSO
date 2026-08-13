@@ -31,17 +31,6 @@ import 'package:motel/core/api/api_client.dart';
           };
         }));
 
-        // Вычисляем общую сумму: Комната + Услуги + Штрафы
-        final servicesSum = transaction.services.fold<int>(0, (sum, s) => sum + s.totalPrice);
-        final finesSum = transaction.fines.fold<int>(0, (sum, f) => sum + f.totalPrice);
-        final roomPrice = transaction.room.totalPrice ?? 0;
-        
-        // Если это чисто транзакция проживания (без услуг и штрафов), и totalPrice 0,
-        // возможно стоит брать price? Но пока оставим totalPrice как основной источник для проживания.
-        // Если это транзакция штрафа, roomPrice будет 0, servicesSum 0, finesSum > 0.
-        
-        final totalPrice = roomPrice + servicesSum + finesSum;
-
         await _apiClient.post(
           '/transactions/send_transaction',
           body: {
@@ -49,7 +38,9 @@ import 'package:motel/core/api/api_client.dart';
             'room_number': transaction.room.number,
             'client_id': clientId,
             'items': items,
-            'payment_summ': totalPrice,
+            // Используем итог из ответа API: room.price может быть стоимостью
+            // только одних суток проживания.
+            'payment_summ': transaction.totalPrice,
             'payment_type': transaction.paymentType,
           },
         );

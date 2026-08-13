@@ -6,6 +6,13 @@ class Transaction {
   final List<TransactionService> services;
   final List<TransactionFine> fines;
   final TransactionRoom room;
+  /// Нормализованная итоговая сумма транзакции (в копейках).
+  ///
+  /// В текущем ответе API стоимость проживания приходит как
+  /// `room.totalPrice`, а стоимость дополнительных позиций — в их
+  /// `totalPrice`. Если сервер когда-нибудь начнёт присылать корневой
+  /// `totalPrice`, он будет использован напрямую.
+  final int totalPrice;
   final String paymentType;
   final DateTime? paymentDateTime;
   final bool sentTo1c;
@@ -18,6 +25,7 @@ class Transaction {
     required this.services,
     required this.fines,
     required this.room,
+    required this.totalPrice,
     required this.paymentType,
     this.paymentDateTime,
     required this.sentTo1c,
@@ -26,23 +34,81 @@ class Transaction {
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
+    final services = (json['services'] as List? ?? const [])
+        .map((s) => TransactionService.fromJson(Map<String, dynamic>.from(s as Map)))
+        .toList();
+    final fines = (json['fines'] as List? ?? const [])
+        .map((f) => TransactionFine.fromJson(Map<String, dynamic>.from(f as Map)))
+        .toList();
+    final room = TransactionRoom.fromJson(
+      Map<String, dynamic>.from(json['room'] as Map),
+    );
+
     return Transaction(
-      id: json['id'],
-      guest: TransactionGuest.fromJson(json['guest']),
-      services: (json['services'] as List)
-          .map((s) => TransactionService.fromJson(s))
-          .toList(),
-      fines: (json['fines'] as List)
-          .map((f) => TransactionFine.fromJson(f))
-          .toList(),
-      room: TransactionRoom.fromJson(json['room']),
-      paymentType: json['paymentType'],
+      id: _asInt(json['id']) ?? 0,
+      guest: TransactionGuest.fromJson(
+        Map<String, dynamic>.from(json['guest'] as Map),
+      ),
+      services: services,
+      fines: fines,
+      room: room,
+      totalPrice: _asInt(json['totalPrice']) ??
+          _fallbackTransactionTotalPrice(room, services, fines),
+      paymentType: json['paymentType']?.toString() ?? '',
       paymentDateTime: _parseTransactionDateTime(json),
       sentTo1c: json['sentTo1c'] ?? false,
       sentSuccessfully: json['sentSuccessfully'] ?? false,
       errorMessage: json['errorMessage'],
     );
   }
+
+  int get servicesTotalPrice =>
+      services.fold<int>(0, (sum, service) => sum + service.totalPrice);
+
+  int get finesTotalPrice =>
+      fines.fold<int>(0, (sum, fine) => sum + fine.totalPrice);
+
+  /// Стоимость проживания для отображения отдельной строкой.
+  ///
+  /// Если `room.totalPrice` отсутствует, берём разницу между нормализованным
+  /// итогом и дополнительными позициями. Для чистого проживания старого
+  /// ответа последним резервом остаётся `price × countDays`.
+  int get roomTotalPrice {
+    final roomTotal = room.totalPrice;
+    if (roomTotal != null && roomTotal > 0) return roomTotal;
+
+    final derivedRoomTotal = totalPrice - servicesTotalPrice - finesTotalPrice;
+    if (derivedRoomTotal > 0) return derivedRoomTotal;
+
+    if (services.isNotEmpty || fines.isNotEmpty) return roomTotal ?? 0;
+
+    final days = room.countDays == null || room.countDays! < 1 ? 1 : room.countDays!;
+    return room.price * days;
+  }
+}
+
+int? _asInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value == null) return null;
+  return int.tryParse(value.toString());
+}
+
+int _fallbackTransactionTotalPrice(
+  TransactionRoom room,
+  List<TransactionService> services,
+  List<TransactionFine> fines,
+) {
+  final days = room.countDays == null || room.countDays! < 1 ? 1 : room.countDays!;
+  final hasAdditionalItems = services.isNotEmpty || fines.isNotEmpty;
+  final roomTotal = room.totalPrice != null && room.totalPrice! > 0
+      ? room.totalPrice!
+      : hasAdditionalItems
+          ? 0
+          : room.price * days;
+  final servicesTotal = services.fold<int>(0, (sum, service) => sum + service.totalPrice);
+  final finesTotal = fines.fold<int>(0, (sum, fine) => sum + fine.totalPrice);
+  return roomTotal + servicesTotal + finesTotal;
 }
 
 class TransactionGuest {
@@ -68,7 +134,7 @@ class TransactionGuest {
 
   factory TransactionGuest.fromJson(Map<String, dynamic> json) {
     return TransactionGuest(
-      id: json['id'],
+      id: _asInt(json['id']) ?? 0,
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
       surname: json['surname'] ?? '',
@@ -137,14 +203,14 @@ class TransactionService {
 
   factory TransactionService.fromJson(Map<String, dynamic> json) {
     return TransactionService(
-      id: json['id'],
-      name: json['name'],
-      price: json['price'],
-      tax: json['tax'],
-      count: json['count'],
-      duration: json['duration'], // Will be null if not present
+      id: _asInt(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      price: _asInt(json['price']) ?? 0,
+      tax: _asInt(json['tax']) ?? 0,
+      count: _asInt(json['count']) ?? 0,
+      duration: _asInt(json['duration']), // Will be null if not present
       serviceCode: json['serviceCode'] ?? '',
-      totalPrice: json['totalPrice'],
+      totalPrice: _asInt(json['totalPrice']) ?? 0,
     );
   }
 }
@@ -168,11 +234,11 @@ class TransactionFine {
 
   factory TransactionFine.fromJson(Map<String, dynamic> json) {
     return TransactionFine(
-      id: json['id'],
-      name: json['name'],
-      price: json['price'],
-      totalPrice: json['totalPrice'],
-      count: json['count'],
+      id: _asInt(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      price: _asInt(json['price']) ?? 0,
+      totalPrice: _asInt(json['totalPrice']) ?? 0,
+      count: _asInt(json['count']) ?? 0,
       fineCode: json['fineCode'] ?? '',
     );
   }
@@ -197,12 +263,12 @@ class TransactionRoom {
 
   factory TransactionRoom.fromJson(Map<String, dynamic> json) {
     return TransactionRoom(
-      number: json['number'],
-      type: json['type'],
-      building: json['building'],
-      countDays: json['countDays'],
-      price: json['price'],
-      totalPrice: json['totalPrice'],
+      number: json['number']?.toString() ?? '',
+      type: json['type']?.toString() ?? '',
+      building: _asInt(json['building']) ?? 0,
+      countDays: _asInt(json['countDays']),
+      price: _asInt(json['price']) ?? 0,
+      totalPrice: _asInt(json['totalPrice']),
     );
   }
 }

@@ -258,45 +258,65 @@ class _RoomPricesSettingsScreenState extends State<RoomPricesSettingsScreen> {
       return const SizedBox.shrink();
     }
 
+    final rows = _csvData!;
+    final columnCount = rows.fold<int>(
+      1,
+      (maxColumns, row) => row.length > maxColumns ? row.length : maxColumns,
+    );
+    final tableWidth = columnCount * 150.0;
+    final tableHeight = (rows.length * 48.0).clamp(48.0, 500.0).toDouble();
+
     return CupertinoListSection.insetGrouped(
       header: const Text('ПРЕДПРОСМОТР ЦЕН'),
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: _csvData!.asMap().entries.map((entry) {
-              final rowIndex = entry.key;
-              final row = entry.value;
-              final isHeader = rowIndex == 0;
+        SizedBox(
+          height: tableHeight,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: tableWidth,
+              child: ListView.builder(
+                itemCount: rows.length,
+                itemExtent: 48,
+                itemBuilder: (context, rowIndex) {
+                  final row = rows[rowIndex];
+                  final isHeader = rowIndex == 0;
 
-              return Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: CupertinoColors.separator.withOpacity(0.5),
-                      width: 0.5,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: row.map<Widget>((cell) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0, vertical: 12.0),
-                      width: 150, // Adjust width as needed
-                      child: Text(
-                        cell.toString(),
-                        style: TextStyle(
-                          fontWeight:
-                              isHeader ? FontWeight.bold : FontWeight.normal,
+                  return Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: CupertinoColors.separator.resolveFrom(context),
+                          width: 0.5,
                         ),
                       ),
-                    );
-                  }).toList(),
-                ),
-              );
-            }).toList(),
+                    ),
+                    child: Row(
+                      children: List<Widget>.generate(
+                        columnCount,
+                        (columnIndex) => Container(
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          width: 150,
+                          child: Text(
+                            columnIndex < row.length
+                                ? row[columnIndex].toString()
+                                : '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: isHeader
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ],

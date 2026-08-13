@@ -11,6 +11,20 @@ class SaveTransactionUseCase {
   SaveTransactionUseCase(this._apiClient);
 
   Future<void> call(BookingData bookingData) async {
+    if (bookingData.selectedCategory == BookingCategory.accommodation && !bookingData.hasValidStayPeriod) {
+      DiagnosticLogger.info(
+        'transactions',
+        'save_transaction_blocked_invalid_period',
+        data: {
+          'checkInDate': bookingData.checkInDate,
+          'checkOutDate': bookingData.checkOutDate,
+          'countDays': bookingData.totalNights,
+          'calculatedRoomPrice': bookingData.calculatedRoomPrice,
+        },
+      );
+      throw StateError('Нельзя сохранить проживание без корректного периода и рассчитанной цены');
+    }
+
     final requestModel = _mapBookingDataToRequest(bookingData);
 
     try {
@@ -76,7 +90,7 @@ class SaveTransactionUseCase {
       number: data.selectedRoom?.name ?? '0',
       type: data.selectedRoom?.type.toApiString() ?? 'unknown',
       building: int.tryParse(data.selectedRoom?.buildingId ?? '0') ?? 0,
-      countDays: data.totalNights,
+      countDays: data.selectedCategory == BookingCategory.accommodation ? data.totalNights : null,
     );
 
     return SaveTransactionRequest(
