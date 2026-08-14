@@ -52,5 +52,18 @@ void main() {
 
     expect(transaction.totalPrice, 450000);
     expect(transaction.roomTotalPrice, 450000);
+    expect(transaction.rrn, isNull);
+    expect(transaction.receiptNumber, isNull);
+  });
+
+  test('parses optional payment identifiers', () {
+    final transaction = Transaction.fromJson({
+      ...transactionJson(),
+      'rrn': '1234567891234',
+      'receiptNumber': 12345,
+    });
+
+    expect(transaction.rrn, '1234567891234');
+    expect(transaction.receiptNumber, 12345);
   });
 }

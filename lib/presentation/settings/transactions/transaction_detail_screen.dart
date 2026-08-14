@@ -194,6 +194,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),
+                    if (widget.transaction.rrn?.trim().isNotEmpty == true)
+                      _buildDetailRow('RRN', widget.transaction.rrn!.trim()),
+                    if (widget.transaction.receiptNumber != null)
+                      _buildDetailRow(
+                        'Номер фискального чека',
+                        widget.transaction.receiptNumber.toString(),
+                      ),
                     CupertinoListTile(
                       title: const Text(
                         'Итоговая сумма',

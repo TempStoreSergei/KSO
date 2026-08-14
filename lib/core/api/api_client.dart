@@ -504,7 +504,7 @@ class ApiClient {
 
   // Метод для экспорта транзакций
   Future<String> exportTransactions() async {
-    final response = await get('/transactions/export_transactions');
+    final response = await get('/transactions/export_transactions_excel');
     return response['url'] as String;
   }
 

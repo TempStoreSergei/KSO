@@ -558,7 +558,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         bytes: response.bodyBytes,
         fileName: fileName,
         dialogTitle: 'Выберите папку для сохранения транзакций',
-        mimeType: 'application/zip',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
 
       if (!isSaved) {

@@ -15,6 +15,8 @@ class Transaction {
   final int totalPrice;
   final String paymentType;
   final DateTime? paymentDateTime;
+  final String? rrn;
+  final int? receiptNumber;
   final bool sentTo1c;
   final bool sentSuccessfully;
   final String? errorMessage;
@@ -28,6 +30,8 @@ class Transaction {
     required this.totalPrice,
     required this.paymentType,
     this.paymentDateTime,
+    this.rrn,
+    this.receiptNumber,
     required this.sentTo1c,
     required this.sentSuccessfully,
     this.errorMessage,
@@ -56,6 +60,8 @@ class Transaction {
           _fallbackTransactionTotalPrice(room, services, fines),
       paymentType: json['paymentType']?.toString() ?? '',
       paymentDateTime: _parseTransactionDateTime(json),
+      rrn: json['rrn']?.toString(),
+      receiptNumber: _asInt(json['receiptNumber']),
       sentTo1c: json['sentTo1c'] ?? false,
       sentSuccessfully: json['sentSuccessfully'] ?? false,
       errorMessage: json['errorMessage'],

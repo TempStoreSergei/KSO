@@ -41,6 +41,8 @@ class TransactionTile extends StatelessWidget {
     final paymentColor = _paymentColor(transaction.paymentType);
     final phone = transaction.guest.phoneNumber?.trim();
     final paymentDateTime = _formatPaymentDateTime(transaction.paymentDateTime);
+    final rrn = transaction.rrn?.trim();
+    final hasPaymentIdentifiers = (rrn != null && rrn.isNotEmpty) || transaction.receiptNumber != null;
     final servicesSum = transaction.services.fold<int>(0, (sum, s) => sum + s.totalPrice);
     final finesSum = transaction.fines.fold<int>(0, (sum, f) => sum + f.totalPrice);
     final hasServices = transaction.services.isNotEmpty;
@@ -98,6 +100,19 @@ class TransactionTile extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               'Оплата: $paymentDateTime',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, color: CupertinoColors.systemGrey2),
+            ),
+          ],
+          if (hasPaymentIdentifiers) ...[
+            const SizedBox(height: 2),
+            Text(
+              [
+                if (rrn != null && rrn.isNotEmpty) 'RRN: $rrn',
+                if (transaction.receiptNumber != null)
+                  'Фискальный чек: ${transaction.receiptNumber}',
+              ].join(' • '),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 13, color: CupertinoColors.systemGrey2),
